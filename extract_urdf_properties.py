@@ -261,9 +261,17 @@ def main():
     # Example usage
     urdf_file = "Stewart.urdf"  # Note the capital S
     
-    # Extract joint properties
+    # Extract joint properties - get both Revolute_ and Slider_ joints
     print(f"Extracting joint properties from {urdf_file}...")
-    joint_properties = extract_joint_properties(urdf_file, "Revolute_")
+    joint_properties = {}
+    
+    # Extract revolute joints
+    revolute_joints = extract_joint_properties(urdf_file, "Revolute_")
+    joint_properties.update(revolute_joints)
+    
+    # Extract slider joints
+    slider_joints = extract_joint_properties(urdf_file, "Slider_")
+    joint_properties.update(slider_joints)
     
     if joint_properties:
         save_properties_to_json(joint_properties, "joint_properties.json")
