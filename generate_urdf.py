@@ -179,26 +179,24 @@ class NameManager:
     def get_component_name(self, base_name: str) -> str:
         """Generate a unique name for a component.
 
-        This method handles special naming conventions for "bottom" links, ensuring
-        that the original "1" suffix is preserved while adding the stage number.
+        This method handles special naming conventions for components, ensuring
+        that original names from mesh files are preserved while adding the stage number.
 
         Args:
-            base_name (str): The base name of the component (e.g., "X1bottom", "cylinder").
+            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11").
 
         Returns:
             str: A unique name for the component, including the stage suffix.
-                 - If base_name is "X1bottom1" and stage is 2, the result is "X1bottom12".
-                 - If base_name is "cylinder" and stage is 2, the result is "cylinder2".
+                 - If base_name is "X1bottom1", result is "X1bottom11" (for stage 1)
+                 - If base_name is "cylinder11", result is "cylinder111" (for stage 1)
+                 - If base_name is "rod11", result is "rod111" (for stage 1)
+                 - If base_name is "base_link", result is "base_link1" (for stage 1)
         """
-        # For bottom links, keep the original "1" suffix and add stage number
-        if "bottom" in base_name:
-            if base_name.endswith('1'):
-                # If it already has a suffix, just add stage number
-                return f"{base_name}{self.stage_suffix}"
-            else:
-                # If no suffix, add both original suffix and stage number
-                return f"{base_name}1{self.stage_suffix}"
-        # For other components, just append stage number
+        # For components that already have a number suffix in original URDF
+        if base_name.endswith('1'):
+            # Just add stage number
+            return f"{base_name}{self.stage_suffix}"
+        # For base_link and other components without number suffix
         return f"{base_name}{self.stage_suffix}"
 
     def get_joint_name(self, joint_num: int) -> str:
@@ -266,24 +264,19 @@ class NameManager:
         """Get the mesh filename for a component.
 
         This method ensures that the correct mesh file is referenced based on the
-        component's base name.
+        component's base name. The mesh filenames should be exactly the same as the
+        file name without any stage suffix.
 
         Args:
-            base_name (str): The base name of the component (e.g., "X1bottom", "base_link", "cylinder").
+            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11").
 
         Returns:
             str: The filename of the mesh.
-                 - If base_name is "X1bottom", the result is "meshes/X1bottom1.stl".
-                 - If base_name is "base_link", the result is "meshes/base_link.stl".
-                 - If base_name is "cylinder", the result is "meshes/cylinder1.stl".
-                 - Otherwise, the result is "meshes/{base_name}.stl".
+                 - If base_name is "X1bottom1", result is "meshes/X1bottom1.stl"
+                 - If base_name is "cylinder11", result is "meshes/cylinder11.stl"
+                 - If base_name is "rod11", result is "meshes/rod11.stl"
+                 - If base_name is "base_link", result is "meshes/base_link.stl"
         """
-        if "bottom" in base_name:
-            return f"meshes/{base_name}1.stl"  # Use original name with 1 suffix for mesh
-        if "base_link" in base_name:
-            return "meshes/base_link.stl"
-        if "cylinder" in base_name or "rod" in base_name:  # Add rod links to this condition
-            return f"meshes/{base_name}1.stl"  # Add 1 suffix for cylinder and rod meshes
         return f"meshes/{base_name}.stl"
 
 class StewartPlatformURDF:
@@ -424,15 +417,15 @@ class StewartPlatformURDF:
 
     def _init_bottom_links(self):
         """Initialize the bottom links and their joints."""
-        # Bottom link configurations based on Link_graph.txt and Stewart.urdf
+        # Bottom link configurations based on Link_graph.txt and mesh files
         bottom_configs = [
             # (name, joint_num)  # Joint numbers from Link_graph.txt
-            ("X1bottom", 1),  # base_link -> X1bottom1 [ label = "Revolute_1" ]
-            ("X6bottom", 2),  # base_link -> X6bottom1 [ label = "Revolute_2" ]
-            ("X5bottom", 3),  # base_link -> X5bottom1 [ label = "Revolute_3" ]
-            ("X2bottom", 4),  # base_link -> X2bottom1 [ label = "Revolute_4" ]
-            ("X4bottom", 5),  # base_link -> X4bottom1 [ label = "Revolute_5" ]
-            ("X3bottom", 6)   # base_link -> X3bottom1 [ label = "Revolute_6" ]
+            ("X1bottom1", 1),  # Use exact name from X1bottom1.stl
+            ("X6bottom1", 2),  # Use exact name from X6bottom1.stl
+            ("X5bottom1", 3),  # Use exact name from X5bottom1.stl
+            ("X2bottom1", 4),  # Use exact name from X2bottom1.stl
+            ("X4bottom1", 5),  # Use exact name from X4bottom1.stl
+            ("X3bottom1", 6)   # Use exact name from X3bottom1.stl
         ]
 
         for base_name, joint_num in bottom_configs:
@@ -509,19 +502,19 @@ class StewartPlatformURDF:
 
     def _init_cylinder_links(self):
         """Initialize the cylinder links and their revolute joints with bottom links."""
-        # Cylinder configurations based on Link_graph.txt
+        # Cylinder configurations based on Link_graph.txt and mesh files
         cylinder_configs = [
             # (cylinder_name, parent_bottom_link, joint_num)
-            ("cylinder6", "X6bottom", 7),
-            ("cylinder5", "X5bottom", 8),
-            ("cylinder1", "X1bottom", 9),
-            ("cylinder2", "X2bottom", 10),
-            ("cylinder3", "X3bottom", 11),
-            ("cylinder4", "X4bottom", 12)
+            ("cylinder61", "X6bottom1", 7),  # Use exact name from cylinder61.stl
+            ("cylinder51", "X5bottom1", 8),  # Use exact name from cylinder51.stl
+            ("cylinder11", "X1bottom1", 9),  # Use exact name from cylinder11.stl
+            ("cylinder21", "X2bottom1", 10), # Use exact name from cylinder21.stl
+            ("cylinder31", "X3bottom1", 11), # Use exact name from cylinder31.stl
+            ("cylinder41", "X4bottom1", 12)  # Use exact name from cylinder41.stl
         ]
 
         for base_name, parent_base, joint_num in cylinder_configs:
-            # Generate names for this stage
+            # Generate names for this stage using NameManager
             link_name = self.name_mgr.get_component_name(base_name)
             joint_name = self.name_mgr.get_joint_name(joint_num)
             parent_name = self.name_mgr.get_component_name(parent_base)
@@ -599,15 +592,15 @@ class StewartPlatformURDF:
 
     def _init_rod_links(self):
         """Initialize the rod links and their slider joints with cylinders."""
-        # Rod configurations based on Link_graph.txt
+        # Rod configurations based on Link_graph.txt and mesh files
         rod_configs = [
             # (rod_name, parent_cylinder, joint_num)
-            ("rod1", "cylinder1", 13),
-            ("rod2", "cylinder2", 14),
-            ("rod3", "cylinder3", 15),
-            ("rod4", "cylinder4", 16),
-            ("rod5", "cylinder5", 17),
-            ("rod6", "cylinder6", 18)
+            ("rod11", "cylinder11", 13),  # Use exact name from rod11.stl
+            ("rod21", "cylinder21", 14),  # Use exact name from rod21.stl
+            ("rod31", "cylinder31", 15),  # Use exact name from rod31.stl
+            ("rod41", "cylinder41", 16),  # Use exact name from rod41.stl
+            ("rod51", "cylinder51", 17),  # Use exact name from rod51.stl
+            ("rod61", "cylinder61", 18)   # Use exact name from rod61.stl
         ]
 
         for base_name, parent_base, joint_num in rod_configs:
