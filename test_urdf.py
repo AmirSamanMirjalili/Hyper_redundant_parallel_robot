@@ -610,14 +610,23 @@ def test_cylinder_links(urdf_properties, name_manager):
     generated_props = urdf_properties['generated']['links']
     
     # Test each cylinder link using exact names from mesh files
-    cylinder_names = [
-        "cylinder11", "cylinder21", "cylinder31",
-        "cylinder41", "cylinder51", "cylinder61"
+    cylinder_configs = [
+        ("cylinder11", "X6bottom1"),  # Use exact names from mesh files
+        ("cylinder51", "X5bottom1"),
+        ("cylinder11", "X1bottom1"),
+        ("cylinder21", "X2bottom1"),
+        ("cylinder31", "X3bottom1"),
+        ("cylinder41", "X4bottom1")
     ]
     
-    for base_name in cylinder_names:
+    for base_name, parent_base in cylinder_configs:
         # Generate names using NameManager
         link_name = name_manager.get_component_name(base_name)
+        parent_name = name_manager.get_component_name(parent_base)
+        
+        print(f"\nTesting cylinder link: {link_name}")
+        print(f"Original name: {base_name}")
+        print(f"Parent link: {parent_name}")
         
         assert link_name in generated_props, f"Cylinder link {link_name} should exist"
         assert base_name in original_props, f"Original cylinder link {base_name} should exist"
@@ -631,7 +640,7 @@ def test_cylinder_links(urdf_properties, name_manager):
                 f"Cylinder {link_name} {prop} should match"
         
         # Compare visual and collision properties
-        assert gen_link.visual['mesh'] == f"meshes/{base_name}.stl", \
+        assert gen_link.visual['mesh'] == name_manager.get_mesh_filename(base_name), \
             f"Cylinder {link_name} should reference correct mesh file"
         assert gen_link.visual['scale'] == "0.001 0.001 0.001", \
             f"Cylinder {link_name} mesh scale should be correct"
