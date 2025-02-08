@@ -503,5 +503,107 @@
       "effort": "100",
       "velocity": "100"
     }
+  },
+  "Slider_13": {
+    "name": "Slider_13",
+    "joint_type": "prismatic",
+    "parent": "cylinder11",
+    "child": "rod11",
+    "origin": {
+      "xyz": "0.068432 -0.03984 0.228025",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.369151 -0.214507 0.904276",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Slider_14": {
+    "name": "Slider_14",
+    "joint_type": "prismatic",
+    "parent": "cylinder21",
+    "child": "rod21",
+    "origin": {
+      "xyz": "-0.02256 0.116805 0.210031",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.00375 0.434573 0.900629",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Slider_15": {
+    "name": "Slider_15",
+    "joint_type": "prismatic",
+    "parent": "cylinder31",
+    "child": "rod31",
+    "origin": {
+      "xyz": "-0.110669 -0.062847 0.205106",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.377381 -0.213518 0.901107",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Slider_16": {
+    "name": "Slider_16",
+    "joint_type": "prismatic",
+    "parent": "cylinder41",
+    "child": "rod41",
+    "origin": {
+      "xyz": "0.0673 -0.064247 0.22273",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.370839 -0.215482 0.903353",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Slider_17": {
+    "name": "Slider_17",
+    "joint_type": "prismatic",
+    "parent": "cylinder51",
+    "child": "rod51",
+    "origin": {
+      "xyz": "-0.0009 0.126758 0.20542",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.003749 0.431354 0.902175",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Slider_18": {
+    "name": "Slider_18",
+    "joint_type": "prismatic",
+    "parent": "cylinder61",
+    "child": "rod61",
+    "origin": {
+      "xyz": "-0.091079 -0.076585 0.210013",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.379485 -0.214736 0.899933",
+    "limits": {
+      "upper": "0.19",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
   }
 }

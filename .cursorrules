@@ -132,6 +132,12 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
   - Keep joint names consistent with original URDF (use Revolute_ prefix even for slider joints)
   - Maintain joint type information in the properties but use consistent naming
   - PyBullet expects revolute joints for counting purposes
+- When extracting joint properties:
+  - Extract both Revolute_ and Slider_ prefixed joints separately and merge them
+  - Maintain original joint types (prismatic for slider joints)
+  - Keep original joint limits and properties
+  - Update parent/child link names with stage suffixes
+  - Validate joint properties before using them
 
 # Scratchpad
 
@@ -146,8 +152,6 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 [X] Cleaned up test code
 [X] Removed temporary file usage
 [X] Implemented base link and bottom links setup
-
-### Next Steps for Cylinder Connections:
 [X] Phase 1: Cylinder Links and Joints
   [X] Add cylinder link generation (cylinder11-61)
   [X] Add revolute joints connecting bottom links to cylinders (Revolute_7-12)
@@ -155,7 +159,6 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
   [X] Add tests for cylinder joint connections
   [X] Fixed naming conventions for stage suffixes
   [X] All tests passing for Phase 1
-
 [X] Phase 2: Rod and Piston Links
   [X] Add rod link generation (rod11-61)
   [X] Add slider joints connecting cylinders to rods (Slider_13-18)
@@ -163,12 +166,8 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
   [X] Add tests for slider joint connections
   [X] Fix PyBullet compatibility issues:
     [X] Keep joint names as Revolute_ for PyBullet
-    [ ] Ensure rod links are properly generated
-    [ ] Fix joint properties for rod connections
-  [ ] Add piston link generation (piston11-61)
-  [ ] Add revolute joints connecting rods to pistons (Revolute_19-24)
-  [ ] Add tests for piston properties
-  [ ] Add tests for revolute joint connections
+    [X] Ensure rod links are properly generated
+    [X] Fix joint properties for rod connections
 
 [ ] Phase 3: Top Links and Universal Joints
   - [ ] Add top link generation (X1top1-X6top1)
