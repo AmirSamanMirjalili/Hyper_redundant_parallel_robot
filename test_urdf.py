@@ -266,9 +266,9 @@ def test_pybullet_loading(pybullet_client, urdf_properties):
         # Get number of joints
         num_joints = p.getNumJoints(robot_id)
         expected_joints = len([j for j in generated_joints.values() 
-                             if j.joint_type == 'revolute'])
+                             if j.joint_type in ['revolute', 'prismatic']])
         assert num_joints == expected_joints, \
-            f"Should have {expected_joints} revolute joints"
+            f"Should have {expected_joints} movable joints (revolute + prismatic)"
         
         # Test joint properties
         for i in range(num_joints):
@@ -281,8 +281,12 @@ def test_pybullet_loading(pybullet_client, urdf_properties):
             
             # Compare joint type
             joint_type = joint_info[2]
-            assert (joint_type == p.JOINT_REVOLUTE) == (joint_props.joint_type == 'revolute'), \
-                f"Joint {joint_name} type should match"
+            if joint_props.joint_type == 'revolute':
+                assert joint_type == p.JOINT_REVOLUTE, \
+                    f"Joint {joint_name} should be revolute"
+            elif joint_props.joint_type == 'prismatic':
+                assert joint_type == p.JOINT_PRISMATIC, \
+                    f"Joint {joint_name} should be prismatic"
             
             # Compare joint limits
             if joint_props.limits:
