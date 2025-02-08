@@ -60,14 +60,15 @@ def test_material_properties(urdf_properties):
     color = material.find('color').get('rgba')
     assert color == "0.700 0.700 0.700 1.000", "Material color should match"
 
-def test_base_link_structure(urdf_properties):
+def test_base_link_structure(urdf_properties, name_manager):
     """Test the structure of the base link"""
     original_props = urdf_properties['original']['links']
     generated_props = urdf_properties['generated']['links']
     
-    # Get base link properties
+    # Get base link properties using name manager
+    base_link_name = name_manager.get_component_name('base_link')
     original_base = original_props.get('base_link')
-    generated_base = generated_props.get('base_link1')
+    generated_base = generated_props.get(base_link_name)
     
     assert generated_base is not None, "Base link should exist"
     assert original_base is not None, "Original base link should exist"
@@ -78,7 +79,7 @@ def test_base_link_structure(urdf_properties):
             f"Base link {prop} should match"
     
     # Compare visual and collision mesh references
-    assert generated_base.visual['mesh'] == "meshes/base_link.stl", \
+    assert generated_base.visual['mesh'] == name_manager.get_mesh_filename('base_link'), \
         "Base link should reference correct mesh file"
     assert generated_base.visual['scale'] == "0.001 0.001 0.001", \
         "Mesh scale should be correct"
@@ -127,26 +128,25 @@ def test_joint_properties(urdf_properties):
                 assert float(gen_props.limits[limit_type]) == float(orig_props.limits[limit_type]), \
                     f"Joint {gen_name} {limit_type} limit should match"
 
-def map_to_original_name(generated_name: str) -> str:
+def map_to_original_name(generated_name: str, name_manager: NameManager) -> str:
     """Map a generated name back to its original name for property comparison.
     
     Examples:
         base_link1 -> base_link
-        X1bottom11 -> X1bottom1
+        X1bottom11 -> X1bottom1  (stage 1 suffix removed)
+        cylinder111 -> cylinder11 (stage 1 suffix removed)
+        rod111 -> rod11 (stage 1 suffix removed)
         Revolute_11 -> Revolute_1
-        UJ111 -> UJ11
-        J1B_11 -> J1B_1
-        J1T11 -> J1T1
     """
     # Handle special case for base link
     if generated_name.startswith('base_link'):
         return 'base_link'
     
-    # Handle bottom links (keep original "1" suffix)
-    if 'bottom' in generated_name:
+    # For components that already have a number suffix in original URDF
+    if any(pattern in generated_name for pattern in ['bottom', 'cylinder', 'rod']):
         return generated_name[:-1]  # Remove stage suffix
     
-    # Handle other components
+    # For joints and other components
     if generated_name.endswith('1'):  # Stage 1
         return generated_name[:-1]
     
@@ -160,7 +160,7 @@ def test_link_properties(urdf_properties):
     # For each link in the generated URDF
     for gen_name, gen_props in generated_props.items():
         # Get the corresponding original link name
-        orig_name = map_to_original_name(gen_name)
+        orig_name = map_to_original_name(gen_name, name_manager)
         
         assert orig_name in original_props, f"Original link {orig_name} should exist"
         orig_props = original_props[orig_name]
@@ -183,15 +183,14 @@ def test_link_properties(urdf_properties):
         assert gen_xyz == orig_xyz, \
             f"Link {gen_name} visual origin should match"
 
-def test_base_connections(urdf_properties, link_graph_data):
+def test_base_connections(urdf_properties, link_graph_data, name_manager):
     """Test if base link connections match the original structure"""
     generated_joints = urdf_properties['generated']['joints']
     original_joints = urdf_properties['original']['joints']
-    stage = 1
 
     def verify_base_connections(stage_num):
         """Verify base connections for a specific stage"""
-        base_link_name = f'base_link{stage_num}'
+        base_link_name = name_manager.get_base_link_name()
 
         # Get actual connections from joint properties
         actual_connections = set()
@@ -200,35 +199,38 @@ def test_base_connections(urdf_properties, link_graph_data):
                 actual_connections.add((joint_name, joint_props.child))
 
         # Get expected connections from link graph and adjust for stage
-        expected_base_connections = {
-            ('Revolute_1', 'X1bottom1'),  # First connection in Link_graph.txt
-            ('Revolute_2', 'X6bottom1'),
-            ('Revolute_3', 'X5bottom1'),
-            ('Revolute_4', 'X2bottom1'),
-            ('Revolute_5', 'X4bottom1'),
-            ('Revolute_6', 'X3bottom1')
-        }
-        expected_connections = adjust_names_for_stage(expected_base_connections, stage_num)
+        expected_base_connections = set()
+        for joint_num, bottom_link in [
+            (1, "X1bottom1"),  # Use exact names from mesh files
+            (2, "X6bottom1"),
+            (3, "X5bottom1"),
+            (4, "X2bottom1"),
+            (5, "X4bottom1"),
+            (6, "X3bottom1")
+        ]:
+            joint_name = name_manager.get_joint_name(joint_num)
+            link_name = name_manager.get_component_name(bottom_link)
+            expected_base_connections.add((joint_name, link_name))
 
         # Compare connections
-        assert actual_connections == expected_connections, \
+        assert actual_connections == expected_base_connections, \
             f"""Base link connections mismatch for stage {stage_num}:
-            Generated: {actual_connections}
-            Expected: {expected_connections}
-            Missing: {expected_connections - actual_connections}
-            Extra: {actual_connections - expected_connections}"""
+            Generated: {sorted(actual_connections)}
+            Expected: {sorted(expected_base_connections)}
+            Missing: {sorted(expected_base_connections - actual_connections)}
+            Extra: {sorted(actual_connections - expected_base_connections)}"""
 
         return actual_connections
 
     # Verify base connections for the current stage
-    base_connections = verify_base_connections(stage)
+    base_connections = verify_base_connections(name_manager.stage)
     
     # Verify properties of each base joint
     for joint_name, joint_props in generated_joints.items():
-        # Remove stage number to match original joint name
-        original_name = joint_name[:-1] if joint_name.endswith('1') else joint_name
-        if original_name in original_joints:
-            orig_props = original_joints[original_name]
+        # Get original joint name for comparison
+        orig_name = map_to_original_name(joint_name, name_manager)
+        if orig_name in original_joints:
+            orig_props = original_joints[orig_name]
             
             # Compare properties
             assert joint_props.joint_type == orig_props.joint_type, \
@@ -241,7 +243,7 @@ def test_base_connections(urdf_properties, link_graph_data):
                 assert joint_props.limits is not None, \
                     f"Joint {joint_name} should have limits"
                 for prop in ['upper', 'lower', 'effort', 'velocity']:
-                    assert joint_props.limits[prop] == orig_props.limits[prop], \
+                    assert float(joint_props.limits[prop]) == float(orig_props.limits[prop]), \
                         f"Joint {joint_name} {prop} limit should match"
 
 @pytest.fixture(scope="function")
@@ -252,7 +254,7 @@ def pybullet_client():
     yield client
     p.disconnect(client)
 
-def test_pybullet_loading(pybullet_client, urdf_properties):
+def test_pybullet_loading(pybullet_client, urdf_properties, name_manager):
     """Test if URDF loads correctly in PyBullet"""
     generated_urdf = urdf_properties['generated']['urdf']
     generated_joints = urdf_properties['generated']['joints']
@@ -278,6 +280,9 @@ def test_pybullet_loading(pybullet_client, urdf_properties):
             # Get corresponding joint properties
             joint_props = generated_joints.get(joint_name)
             assert joint_props is not None, f"Joint {joint_name} should exist in properties"
+            
+            # Get original joint name for comparison
+            orig_name = map_to_original_name(joint_name, name_manager)
             
             # Compare joint type
             joint_type = joint_info[2]
@@ -434,39 +439,31 @@ def get_joint_connections(root, parent_link=None):
     
     return connections
 
-def adjust_names_for_stage(connections, stage, double_suffix_patterns=None):
+def adjust_names_for_stage(connections, stage, name_manager):
     """
-    Adjust connection names for a specific stage.
+    Adjust connection names for a specific stage using the name manager.
     
     Args:
         connections: Set of (joint_name, link_name) tuples
         stage: Stage number to append
-        double_suffix_patterns: Optional list of patterns where suffix should be applied twice
+        name_manager: NameManager instance to use for name handling
         
     Returns:
         Set of adjusted (joint_name, link_name) tuples
     """
-    if double_suffix_patterns is None:
-        double_suffix_patterns = ['bottom']
-        
     adjusted = set()
-    stage_str = str(stage)
     
     for joint, link in connections:
-        # For joints, append stage number once
-        joint_name = f"{joint}{stage_str}"
-        
-        # For bottom links, first 1 matches original URDF, second 1 represents the stage
-        if any(pattern in link for pattern in double_suffix_patterns):
-            # If link already has a suffix (from original URDF), keep it and add stage
-            if link.endswith('1'):
-                base = link[:-1]
-                link_name = f"{base}1{stage_str}"
-            else:
-                link_name = f"{link}1{stage_str}"
+        # Extract joint number if it's a numbered joint
+        if '_' in joint:
+            joint_num = int(joint.split('_')[1])
+            joint_name = name_manager.get_joint_name(joint_num)
         else:
-            link_name = f"{link}{stage_str}"
-            
+            joint_name = name_manager.get_component_name(joint)
+        
+        # For links, use the name manager to get the correct name
+        link_name = name_manager.get_component_name(link)
+        
         adjusted.add((joint_name, link_name))
     
     return adjusted
@@ -612,29 +609,32 @@ def test_cylinder_links(urdf_properties, name_manager):
     original_props = urdf_properties['original']['links']
     generated_props = urdf_properties['generated']['links']
     
-    # Test each cylinder link
-    for i in range(1, 7):
-        # Get original and generated names
-        base_name = f"cylinder{i}"
-        gen_name = name_manager.get_component_name(base_name)
-        orig_name = f"{base_name}1"  # Original name from Stewart.urdf
+    # Test each cylinder link using exact names from mesh files
+    cylinder_names = [
+        "cylinder11", "cylinder21", "cylinder31",
+        "cylinder41", "cylinder51", "cylinder61"
+    ]
+    
+    for base_name in cylinder_names:
+        # Generate names using NameManager
+        link_name = name_manager.get_component_name(base_name)
         
-        assert gen_name in generated_props, f"Cylinder link {gen_name} should exist"
-        assert orig_name in original_props, f"Original cylinder link {orig_name} should exist"
+        assert link_name in generated_props, f"Cylinder link {link_name} should exist"
+        assert base_name in original_props, f"Original cylinder link {base_name} should exist"
         
-        gen_link = generated_props[gen_name]
-        orig_link = original_props[orig_name]
+        gen_link = generated_props[link_name]
+        orig_link = original_props[base_name]  # Use exact mesh file name
         
         # Compare inertial properties
         for prop in ['mass', 'ixx', 'iyy', 'izz', 'ixy', 'iyz', 'ixz']:
             assert float(orig_link.inertial[prop]) == float(gen_link.inertial[prop]), \
-                f"Cylinder {gen_name} {prop} should match"
+                f"Cylinder {link_name} {prop} should match"
         
         # Compare visual and collision properties
-        assert gen_link.visual['mesh'] == name_manager.get_mesh_filename(base_name), \
-            f"Cylinder {gen_name} should reference correct mesh file"
+        assert gen_link.visual['mesh'] == f"meshes/{base_name}.stl", \
+            f"Cylinder {link_name} should reference correct mesh file"
         assert gen_link.visual['scale'] == "0.001 0.001 0.001", \
-            f"Cylinder {gen_name} mesh scale should be correct"
+            f"Cylinder {link_name} mesh scale should be correct"
 
 def test_cylinder_joints(urdf_properties, name_manager):
     """Test if cylinder joints are correctly connected"""
@@ -643,12 +643,12 @@ def test_cylinder_joints(urdf_properties, name_manager):
     
     # Test revolute joints connecting bottom links to cylinders (Revolute_7-12)
     joint_configs = [
-        (7, "X6bottom", "cylinder6"),
-        (8, "X5bottom", "cylinder5"),
-        (9, "X1bottom", "cylinder1"),
-        (10, "X2bottom", "cylinder2"),
-        (11, "X3bottom", "cylinder3"),
-        (12, "X4bottom", "cylinder4")
+        (7, "X6bottom1", "cylinder61"),  # Use exact names from mesh files
+        (8, "X5bottom1", "cylinder51"),
+        (9, "X1bottom1", "cylinder11"),
+        (10, "X2bottom1", "cylinder21"),
+        (11, "X3bottom1", "cylinder31"),
+        (12, "X4bottom1", "cylinder41")
     ]
     
     for joint_num, parent_base, child_base in joint_configs:
@@ -727,12 +727,12 @@ def test_rod_joints(urdf_properties, name_manager):
     
     # Test slider joints connecting cylinders to rods (Slider_13-18)
     joint_configs = [
-        (13, "cylinder1", "rod1"),
-        (14, "cylinder2", "rod2"),
-        (15, "cylinder3", "rod3"),
-        (16, "cylinder4", "rod4"),
-        (17, "cylinder5", "rod5"),
-        (18, "cylinder6", "rod6")
+        (13, "cylinder11", "rod11"),  # Use exact names from mesh files
+        (14, "cylinder21", "rod21"),
+        (15, "cylinder31", "rod31"),
+        (16, "cylinder41", "rod41"),
+        (17, "cylinder51", "rod51"),
+        (18, "cylinder61", "rod61")
     ]
     
     for joint_num, parent_base, child_base in joint_configs:
@@ -772,8 +772,8 @@ def test_rod_links(urdf_properties, name_manager):
     generated_links = urdf_properties['generated']['links']
     original_links = urdf_properties['original']['links']
     
-    # Test rod links (rod11-61)
-    rod_names = ["rod1", "rod2", "rod3", "rod4", "rod5", "rod6"]
+    # Test rod links using exact names from mesh files
+    rod_names = ["rod11", "rod21", "rod31", "rod41", "rod51", "rod61"]
     
     for base_name in rod_names:
         # Generate names using NameManager
@@ -782,11 +782,11 @@ def test_rod_links(urdf_properties, name_manager):
         assert link_name in generated_links, f"Link {link_name} should exist"
         
         link = generated_links[link_name]
-        orig_link = original_links[f"{base_name}1"]  # Original has suffix 1
+        orig_link = original_links[base_name]  # Use exact mesh file name
         
         # Verify inertial properties
         assert link.inertial is not None, f"Link {link_name} should have inertial properties"
-        assert orig_link.inertial is not None, f"Original link {base_name}1 should have inertial properties"
+        assert orig_link.inertial is not None, f"Original link {base_name} should have inertial properties"
         
         # Compare inertial values
         assert float(link.inertial['mass']) == float(orig_link.inertial['mass']), \
@@ -798,12 +798,10 @@ def test_rod_links(urdf_properties, name_manager):
         
         # Verify visual properties
         assert link.visual is not None, f"Link {link_name} should have visual properties"
-        assert link.visual['geometry'] is not None, f"Link {link_name} should have visual geometry"
-        assert link.visual['geometry']['mesh'] == name_manager.get_mesh_filename(base_name), \
+        assert link.visual['mesh'] == f"meshes/{base_name}.stl", \
             f"Link {link_name} should have correct mesh file"
         
         # Verify collision properties
         assert link.collision is not None, f"Link {link_name} should have collision properties"
-        assert link.collision['geometry'] is not None, f"Link {link_name} should have collision geometry"
-        assert link.collision['geometry']['mesh'] == name_manager.get_mesh_filename(base_name), \
+        assert link.collision['mesh'] == f"meshes/{base_name}.stl", \
             f"Link {link_name} should have correct collision mesh file" 
