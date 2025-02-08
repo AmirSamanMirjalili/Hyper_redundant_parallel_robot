@@ -234,16 +234,20 @@ class StewartPlatformURDF:
         try:
             # Extract the joint number and create the original name
             base_name = self.name_mgr.strip_stage_suffix(joint_name)
-            if not (base_name.startswith('Revolute_') or base_name.startswith('Slider_')):
-                return None
-
-            # For Slider joints, we need to look up the original name with Slider_ prefix
-            original_name = base_name
+            
+            # Handle both Revolute_ and Slider_ prefixes
             if base_name.startswith('Slider_'):
-                original_name = base_name  # Keep Slider_ prefix
-            else:
+                # For explicit Slider_ lookups, use as is
+                original_name = base_name
+            elif base_name.startswith('Revolute_'):
+                # For Revolute_ joints, check if it's actually a slider joint (13-18)
                 joint_num = int(base_name.split('_')[1])
-                original_name = f"Revolute_{joint_num}"
+                if 13 <= joint_num <= 18:
+                    original_name = f"Slider_{joint_num}"
+                else:
+                    original_name = base_name
+            else:
+                return None
 
             # Get the original properties
             if original_name in self.original_joint_props:
@@ -259,6 +263,11 @@ class StewartPlatformURDF:
                     props.child = self.name_mgr.get_component_name(props.child.rsplit('1', 1)[0])
                 else:
                     props.child = self.name_mgr.get_component_name(props.child)
+                
+                # For slider joints (13-18), keep the joint type as prismatic
+                joint_num = int(original_name.split('_')[1])
+                if 13 <= joint_num <= 18:
+                    props.joint_type = "prismatic"
                 
                 return props
         except (ValueError, IndexError) as e:
@@ -514,12 +523,12 @@ class StewartPlatformURDF:
         for base_name, parent_base, joint_num in rod_configs:
             # Generate names for this stage
             link_name = self.name_mgr.get_component_name(base_name)
-            joint_name = self.name_mgr.get_joint_name(joint_num)
+            joint_name = self.name_mgr.get_joint_name(joint_num)  # This will use Revolute_ prefix
             parent_name = self.name_mgr.get_component_name(parent_base)
             
-            # Get original properties
+            # Get original properties using Slider_ prefix to match original URDF
             original_link_props = self._get_original_link_props(link_name)
-            original_joint_props = self._get_original_joint_props(joint_name)
+            original_joint_props = self._get_original_joint_props(joint_name)  # Will handle Slider_ internally
             
             if original_link_props and original_joint_props:
                 # Create rod link
@@ -565,8 +574,8 @@ class StewartPlatformURDF:
                 )
                 
                 joint = Joint(
-                    name=joint_name,
-                    joint_type=original_joint_props.joint_type,
+                    name=joint_name,  # Use Revolute_ prefix for PyBullet compatibility
+                    joint_type=original_joint_props.joint_type,  # Will be "prismatic" from _get_original_joint_props
                     parent=parent_name,
                     child=link_name,
                     origin=joint_origin,
