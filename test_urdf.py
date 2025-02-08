@@ -13,7 +13,9 @@ from generate_urdf import NameManager
 def urdf_properties():
     """Fixture providing properties from both original and generated URDF"""
     # Extract properties from original URDF
-    original_joint_props = extract_joint_properties('Stewart.urdf', "Revolute_")
+    original_revolute_props = extract_joint_properties('Stewart.urdf', "Revolute_")
+    original_slider_props = extract_joint_properties('Stewart.urdf', "Slider_")
+    original_joint_props = {**original_revolute_props, **original_slider_props}
     original_link_props = extract_link_properties('Stewart.urdf')
     
     # Generate our URDF
@@ -23,7 +25,9 @@ def urdf_properties():
     generated_root = ET.fromstring(generated_urdf)
     
     # Extract properties directly from the XML string
-    generated_joint_props = extract_joint_properties(generated_urdf, "Revolute_")
+    generated_revolute_props = extract_joint_properties(generated_urdf, "Revolute_")
+    generated_slider_props = extract_joint_properties(generated_urdf, "Slider_")
+    generated_joint_props = {**generated_revolute_props, **generated_slider_props}
     generated_link_props = extract_link_properties(generated_urdf)
     
     return {
