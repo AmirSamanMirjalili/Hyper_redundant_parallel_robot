@@ -143,18 +143,53 @@ class Joint:
         return joint_xml
 
 class NameManager:
-    """Manages naming conventions for URDF components."""
+    """Manages naming conventions for URDF components.
+
+    This class provides methods to generate consistent and unique names for
+    links, joints, and other components in a URDF file, especially when
+    creating multi-stage Stewart platforms. It handles the addition of stage-specific
+    suffixes to names and ensures that mesh filenames are correctly referenced.
+
+    For example, if you have a base name "bottom_link" and the stage is 2,
+    the `get_component_name` method will return "bottom_link2".  For "X1bottom1" it will return "X1bottom12".
+    """
     def __init__(self, stage: int, base_prefix: str = ""):
+        """Initializes the NameManager.
+
+        Args:
+            stage (int): The stage number of the platform. This is used to generate
+                         unique names for each stage. For example, stage 1, stage 2, etc.
+            base_prefix (str, optional): A prefix to add to the base link name.
+                                         Defaults to "".  For example, "upper_" or "lower_".
+        """
         self.stage = stage
         self.base_prefix = base_prefix
         self.stage_suffix = str(stage)
 
     def get_base_link_name(self) -> str:
-        """Get the name of the base link."""
+        """Get the name of the base link.
+
+        Returns:
+            str: The name of the base link, including the base prefix and stage suffix.
+                 For example, if base_prefix is "upper_" and stage is 2, the result
+                 would be "upper_base_link2".
+        """
         return f"{self.base_prefix}base_link{self.stage_suffix}"
 
     def get_component_name(self, base_name: str) -> str:
-        """Generate a unique name for a component."""
+        """Generate a unique name for a component.
+
+        This method handles special naming conventions for "bottom" links, ensuring
+        that the original "1" suffix is preserved while adding the stage number.
+
+        Args:
+            base_name (str): The base name of the component (e.g., "X1bottom", "cylinder").
+
+        Returns:
+            str: A unique name for the component, including the stage suffix.
+                 - If base_name is "X1bottom1" and stage is 2, the result is "X1bottom12".
+                 - If base_name is "cylinder" and stage is 2, the result is "cylinder2".
+        """
         # For bottom links, keep the original "1" suffix and add stage number
         if "bottom" in base_name:
             if base_name.endswith('1'):
@@ -167,27 +202,82 @@ class NameManager:
         return f"{base_name}{self.stage_suffix}"
 
     def get_joint_name(self, joint_num: int) -> str:
-        """Get the name of a joint."""
-        # All joints use Revolute_ prefix for PyBullet compatibility
-        return f"Revolute_{joint_num}{self.stage_suffix}"
+        """Get the name of a joint.
+
+        Args:
+            joint_num (int): The joint number.
+
+        Returns:
+            str: The name of the joint with appropriate prefix and stage suffix.
+                 For slider joints (13-18), uses "Slider_" prefix.
+                 For other joints, uses "Revolute_" prefix.
+                 For example:
+                 - If joint_num is 3, result is "Revolute_31" (for stage 1)
+                 - If joint_num is 13, result is "Slider_131" (for stage 1)
+        """
+        # Use Slider_ prefix for joints 13-18, Revolute_ for others
+        prefix = "Slider_" if 13 <= joint_num <= 18 else "Revolute_"
+        return f"{prefix}{joint_num}{self.stage_suffix}"
 
     def get_transmission_name(self, joint_name: str) -> str:
-        """Get the name of a transmission."""
+        """Get the name of a transmission.
+
+        Args:
+            joint_name (str): The name of the joint associated with the transmission.
+
+        Returns:
+            str: The name of the transmission, which is the joint name with "_tran" appended.
+                 For example:
+                 - If joint_name is "Revolute_32", result is "Revolute_32_tran"
+                 - If joint_name is "Slider_132", result is "Slider_132_tran"
+        """
         return f"{joint_name}_tran"
 
     def strip_stage_suffix(self, name: str) -> str:
-        """Remove stage suffix from a name."""
+        """Remove stage suffix from a name.
+
+        Args:
+            name (str): The name from which to remove the stage suffix.
+
+        Returns:
+            str: The name without the stage suffix.
+                 For example, if name is "cylinder2" and stage is 2, the result is "cylinder".
+        """
         return name.rsplit(self.stage_suffix, 1)[0]
 
     def get_original_bottom_link_name(self, link_name: str) -> str:
-        """Get the original name for a bottom link."""
+        """Get the original name for a bottom link.
+
+        This is used to retrieve properties from the original URDF.
+
+        Args:
+            link_name (str): The name of the bottom link with the stage suffix.
+
+        Returns:
+            str: The original name of the bottom link without the stage suffix.
+                 For example, if link_name is "X1bottom12", the result is "X1bottom1".
+        """
         if "bottom" in link_name:
             x_num = link_name.split('X')[1][0]  # Get the number after X
             return f"X{x_num}bottom1"
         return link_name
 
     def get_mesh_filename(self, base_name: str) -> str:
-        """Get the mesh filename for a component."""
+        """Get the mesh filename for a component.
+
+        This method ensures that the correct mesh file is referenced based on the
+        component's base name.
+
+        Args:
+            base_name (str): The base name of the component (e.g., "X1bottom", "base_link", "cylinder").
+
+        Returns:
+            str: The filename of the mesh.
+                 - If base_name is "X1bottom", the result is "meshes/X1bottom1.stl".
+                 - If base_name is "base_link", the result is "meshes/base_link.stl".
+                 - If base_name is "cylinder", the result is "meshes/cylinder1.stl".
+                 - Otherwise, the result is "meshes/{base_name}.stl".
+        """
         if "bottom" in base_name:
             return f"meshes/{base_name}1.stl"  # Use original name with 1 suffix for mesh
         if "base_link" in base_name:
@@ -239,6 +329,7 @@ class StewartPlatformURDF:
             if base_name.startswith('Slider_'):
                 # For explicit Slider_ lookups, use as is
                 original_name = base_name
+                joint_num = int(base_name.split('_')[1])
             elif base_name.startswith('Revolute_'):
                 # For Revolute_ joints, check if it's actually a slider joint (13-18)
                 joint_num = int(base_name.split('_')[1])
@@ -249,9 +340,12 @@ class StewartPlatformURDF:
             else:
                 return None
 
+            print(f"[Joint Lookup] {joint_name} -> {original_name}")
+            
             # Get the original properties
             if original_name in self.original_joint_props:
                 props = self.original_joint_props[original_name]
+                print(f"[Joint Props] Found properties for {original_name}: type={props.joint_type}")
                 
                 # Update parent/child links to use stage-appropriate names
                 if props.parent == "base_link":
@@ -264,17 +358,13 @@ class StewartPlatformURDF:
                 else:
                     props.child = self.name_mgr.get_component_name(props.child)
                 
-                # For slider joints (13-18), keep the joint type as prismatic
-                joint_num = int(original_name.split('_')[1])
-                if 13 <= joint_num <= 18:
-                    props.joint_type = "prismatic"
-                
                 return props
-        except (ValueError, IndexError) as e:
-            print(f"Warning: Failed to process joint name {joint_name}: {str(e)}")
+            
+            print(f"[Joint Props] No properties found for {original_name}")
             return None
-        
-        return None
+        except (ValueError, IndexError) as e:
+            print(f"[Joint Error] Failed to process joint name {joint_name}: {str(e)}")
+            return None
 
     def _get_original_link_props(self, link_name: str) -> Optional[Dict]:
         """Get properties of a link from the original URDF."""
@@ -521,14 +611,17 @@ class StewartPlatformURDF:
         ]
 
         for base_name, parent_base, joint_num in rod_configs:
-            # Generate names for this stage
+            # Generate names for this stage using NameManager
             link_name = self.name_mgr.get_component_name(base_name)
-            joint_name = self.name_mgr.get_joint_name(joint_num)  # This will use Revolute_ prefix
+            joint_name = self.name_mgr.get_joint_name(joint_num)  # Will return Slider_XX for these joints
             parent_name = self.name_mgr.get_component_name(parent_base)
             
-            # Get original properties using Slider_ prefix to match original URDF
+            print(f"\n[Rod Joint] Processing joint {joint_num}:")
+            print(f"[Rod Joint] Generated names: joint={joint_name}, link={link_name}, parent={parent_name}")
+            
+            # Get original properties
             original_link_props = self._get_original_link_props(link_name)
-            original_joint_props = self._get_original_joint_props(joint_name)  # Will handle Slider_ internally
+            original_joint_props = self._get_original_joint_props(joint_name)  # Will handle Slider_ prefix internally
             
             if original_link_props and original_joint_props:
                 # Create rod link
@@ -573,9 +666,10 @@ class StewartPlatformURDF:
                     tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
                 )
                 
+                # Create the slider joint with explicit type and properties
                 joint = Joint(
-                    name=joint_name,  # Use Revolute_ prefix for PyBullet compatibility
-                    joint_type=original_joint_props.joint_type,  # Will be "prismatic" from _get_original_joint_props
+                    name=joint_name,  # Using NameManager's joint name (Slider_XX)
+                    joint_type="prismatic",  # Explicitly set to prismatic for slider joints
                     parent=parent_name,
                     child=link_name,
                     origin=joint_origin,
@@ -586,16 +680,8 @@ class StewartPlatformURDF:
                         joint_name
                     )
                 )
+                print(f"[Rod Joint] Created joint: name={joint.name}, type={joint.joint_type}, parent={joint.parent}, child={joint.child}")
                 self.joints.append(joint)
-                
-                print(f"\nDebug: Generated rod link and joint:")
-                print(f"Link name: {link_name}")
-                print(f"Joint name: {joint_name}")
-                print(f"Parent link: {parent_name}")
-                print(f"Joint type: {joint.joint_type}")
-                print(f"Joint axis: {joint.axis}")
-                if joint.limits:
-                    print(f"Joint limits: {joint.limits}")
 
     def generate(self) -> str:
         """Generate the URDF XML string."""
@@ -612,14 +698,10 @@ class StewartPlatformURDF:
             xml_parts.append(link.to_xml())
             
         # Add all joints with debug output
-        print("\nDebug: Generating joints:")
+        print("\n[XML Generation] Adding joints:")
         for joint in self.joints:
             joint_xml = joint.to_xml()
-            print(f"\nJoint {joint.name}:")
-            print(f"Parent: {joint.parent}")
-            print(f"Child: {joint.child}")
-            print("Generated XML:")
-            print(joint_xml)
+            print(f"[XML Generation] Joint {joint.name} ({joint.joint_type})")
             xml_parts.append(joint_xml)
             
         xml_parts.append('</robot>')
@@ -627,28 +709,11 @@ class StewartPlatformURDF:
         
         # Validate and clean up XML
         try:
-            # First parse to validate
             root = ET.fromstring(urdf_str)
-            
-            # Clean up the XML by re-serializing without extra whitespace
             clean_xml = ET.tostring(root, encoding='unicode', method='xml')
-            
-            # Parse again and pretty print for debugging
-            root = ET.fromstring(clean_xml)
-            from xml.dom import minidom
-            pretty_xml = minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
-            
-            # Debug: Print final XML
-            print("\nDebug: Complete generated URDF (pretty printed):")
-            print(pretty_xml)
-            
-            # Return the clean XML, not the pretty-printed version
             return clean_xml
-            
         except ET.ParseError as e:
-            print(f"\nError: Failed to parse generated XML: {e}")
-            print("Original XML:")
-            print(urdf_str)
+            print(f"[XML Error] Failed to parse generated XML: {e}")
             raise
 
 def generate_stewart_platform(stage: int = 1, base_prefix: str = "", base_z: float = 0) -> str:
