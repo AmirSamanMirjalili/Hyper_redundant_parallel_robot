@@ -1,0 +1,507 @@
+{
+  "Revolute_1": {
+    "name": "Revolute_1",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X1bottom1",
+    "origin": {
+      "xyz": "-0.160375 -0.15639 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.5 -0.866025 -0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_2": {
+    "name": "Revolute_2",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X6bottom1",
+    "origin": {
+      "xyz": "0.173125 -0.134306 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "1.0 -0.0 0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_3": {
+    "name": "Revolute_3",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X5bottom1",
+    "origin": {
+      "xyz": "0.215625 -0.060694 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "1.0 -0.0 -0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_4": {
+    "name": "Revolute_4",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X2bottom1",
+    "origin": {
+      "xyz": "-0.202875 -0.082778 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.5 -0.866025 0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_5": {
+    "name": "Revolute_5",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X4bottom1",
+    "origin": {
+      "xyz": "0.05525 0.172916 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.5 -0.866025 -0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_6": {
+    "name": "Revolute_6",
+    "joint_type": "revolute",
+    "parent": "base_link",
+    "child": "X3bottom1",
+    "origin": {
+      "xyz": "-0.02975 0.172916 0.064756",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.5 -0.866025 0.0",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_7": {
+    "name": "Revolute_7",
+    "joint_type": "revolute",
+    "parent": "X6bottom1",
+    "child": "cylinder61",
+    "origin": {
+      "xyz": "-0.0255 0.025047 0.005976",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.0 0.972693 0.232097",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_8": {
+    "name": "Revolute_8",
+    "joint_type": "revolute",
+    "parent": "X5bottom1",
+    "child": "cylinder51",
+    "origin": {
+      "xyz": "-0.0255 -0.023231 0.011107",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.0 -0.902181 0.431357",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_9": {
+    "name": "Revolute_9",
+    "joint_type": "revolute",
+    "parent": "X1bottom1",
+    "child": "cylinder11",
+    "origin": {
+      "xyz": "0.032916 0.010441 -0.010994",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.783126 -0.452138 -0.426948",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_10": {
+    "name": "Revolute_10",
+    "joint_type": "revolute",
+    "parent": "X2bottom1",
+    "child": "cylinder21",
+    "origin": {
+      "xyz": "0.03441 0.009579 0.006124",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.841174 -0.485652 0.23784",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_11": {
+    "name": "Revolute_11",
+    "joint_type": "revolute",
+    "parent": "X3bottom1",
+    "child": "cylinder31",
+    "origin": {
+      "xyz": "0.007345 0.033686 0.011164",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.780387 0.450557 0.433584",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_12": {
+    "name": "Revolute_12",
+    "joint_type": "revolute",
+    "parent": "X4bottom1",
+    "child": "cylinder41",
+    "origin": {
+      "xyz": "0.008953 0.034614 -0.005921",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.842824 0.486605 -0.229918",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_19": {
+    "name": "Revolute_19",
+    "joint_type": "revolute",
+    "parent": "rod11",
+    "child": "piston11",
+    "origin": {
+      "xyz": "0.000223 -0.000129 0.000545",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.369151 -0.214507 0.904276",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_20": {
+    "name": "Revolute_20",
+    "joint_type": "revolute",
+    "parent": "rod21",
+    "child": "piston21",
+    "origin": {
+      "xyz": "-4e-06 0.00048 0.000995",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.00375 0.434573 0.900629",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_21": {
+    "name": "Revolute_21",
+    "joint_type": "revolute",
+    "parent": "rod31",
+    "child": "piston31",
+    "origin": {
+      "xyz": "-0.000369 -0.00021 0.000883",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.377381 -0.213518 0.901107",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_22": {
+    "name": "Revolute_22",
+    "joint_type": "revolute",
+    "parent": "rod61",
+    "child": "piston61",
+    "origin": {
+      "xyz": "-0.000399 -0.000226 0.000946",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.379485 -0.214736 0.899933",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_23": {
+    "name": "Revolute_23",
+    "joint_type": "revolute",
+    "parent": "rod51",
+    "child": "piston51",
+    "origin": {
+      "xyz": "-6e-06 0.000667 0.001393",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.003749 0.431354 0.902175",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_24": {
+    "name": "Revolute_24",
+    "joint_type": "revolute",
+    "parent": "rod41",
+    "child": "piston41",
+    "origin": {
+      "xyz": "0.00037 -0.000214 0.0009",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.370839 -0.215482 0.903353",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_25": {
+    "name": "Revolute_25",
+    "joint_type": "revolute",
+    "parent": "piston61",
+    "child": "X6top1",
+    "origin": {
+      "xyz": "0.004703 0.002865 0.047121",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.779795 -0.449231 -0.436018",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_26": {
+    "name": "Revolute_26",
+    "joint_type": "revolute",
+    "parent": "piston11",
+    "child": "X1top1",
+    "origin": {
+      "xyz": "0.036291 0.003778 0.030321",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.844029 -0.484671 0.229586",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_27": {
+    "name": "Revolute_27",
+    "joint_type": "revolute",
+    "parent": "piston41",
+    "child": "X4top1",
+    "origin": {
+      "xyz": "0.034764 -0.020174 0.025202",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.78153 0.453054 0.428898",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_28": {
+    "name": "Revolute_28",
+    "joint_type": "revolute",
+    "parent": "piston51",
+    "child": "X5top1",
+    "origin": {
+      "xyz": "0.021283 0.004826 0.042124",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.840501 0.487444 -0.236553",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_29": {
+    "name": "Revolute_29",
+    "joint_type": "revolute",
+    "parent": "X1top1",
+    "child": "UJ11",
+    "origin": {
+      "xyz": "-0.00869 -0.034684 0.005904",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.498367 -0.866964 0.001935",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_30": {
+    "name": "Revolute_30",
+    "joint_type": "revolute",
+    "parent": "X6top1",
+    "child": "UJ61",
+    "origin": {
+      "xyz": "-0.007051 -0.03378 -0.011069",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.498367 -0.866964 0.001935",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_31": {
+    "name": "Revolute_31",
+    "joint_type": "revolute",
+    "parent": "X5top1",
+    "child": "UJ51",
+    "origin": {
+      "xyz": "-0.008516 0.034706 -0.006025",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.501629 0.865083 0.000253",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_32": {
+    "name": "Revolute_32",
+    "joint_type": "revolute",
+    "parent": "X4top1",
+    "child": "UJ41",
+    "origin": {
+      "xyz": "-0.007012 0.033829 0.010943",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.501629 0.865083 0.000253",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_33": {
+    "name": "Revolute_33",
+    "joint_type": "revolute",
+    "parent": "piston31",
+    "child": "X3top1",
+    "origin": {
+      "xyz": "-0.015064 0.016268 0.041942",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.001325 -0.972931 -0.231091",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_34": {
+    "name": "Revolute_34",
+    "joint_type": "continuous",
+    "parent": "X3top1",
+    "child": "UJ31",
+    "origin": {
+      "xyz": "0.025716 -0.024858 -0.005837",
+      "rpy": "0 0 0"
+    },
+    "axis": "0.999996 -0.001881 0.002188",
+    "limits": null
+  },
+  "Revolute_35": {
+    "name": "Revolute_35",
+    "joint_type": "revolute",
+    "parent": "piston21",
+    "child": "X2top1",
+    "origin": {
+      "xyz": "-8.3e-05 0.040352 0.024949",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.002645 -0.900636 0.434566",
+    "limits": {
+      "upper": "0.785398",
+      "lower": "-0.785398",
+      "effort": "100",
+      "velocity": "100"
+    }
+  },
+  "Revolute_36": {
+    "name": "Revolute_36",
+    "joint_type": "revolute",
+    "parent": "X2top1",
+    "child": "UJ21",
+    "origin": {
+      "xyz": "-0.025817 -0.022918 0.011025",
+      "rpy": "0 0 0"
+    },
+    "axis": "-0.999996 0.001881 -0.002188",
+    "limits": {
+      "upper": "6.283185",
+      "lower": "0.0",
+      "effort": "100",
+      "velocity": "100"
+    }
+  }
+}

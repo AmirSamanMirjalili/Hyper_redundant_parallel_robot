@@ -1,0 +1,202 @@
+# Instructions
+
+During you interaction with the user, if you find anything reusable in this project (e.g. version of a library, model name), especially about a fix to a mistake you made or a correction you received, you should take note in the `Lessons` section in the `.cursorrules` file so you will not make the same mistake again. 
+
+You should also use the `.cursorrules` file as a scratchpad to organize your thoughts. Especially when you receive a new task, you should first review the content of the scratchpad, clear old different task if necessary, first explain the task, and plan the steps you need to take to complete the task. You can use todo markers to indicate the progress, e.g.
+[X] Task 1
+[ ] Task 2
+
+Also update the progress of the task in the Scratchpad when you finish a subtask.
+Especially when you finished a milestone, it will help to improve your depth of task accomplishment to use the scratchpad to reflect and plan.
+The goal is to help you maintain a big picture as well as the progress of the task. Always refer to the Scratchpad when you plan the next step.
+
+# Tools
+
+Note all the tools are in python. So in the case you need to do batch processing, you can always consult the python files and write your own script.
+
+## Screenshot Verification
+The screenshot verification workflow allows you to capture screenshots of web pages and verify their appearance using LLMs. The following tools are available:
+
+1. Screenshot Capture:
+```bash
+venv/bin/python tools/screenshot_utils.py URL [--output OUTPUT] [--width WIDTH] [--height HEIGHT]
+```
+
+2. LLM Verification with Images:
+```bash
+venv/bin/python tools/llm_api.py --prompt "Your verification question" --provider {openai|anthropic} --image path/to/screenshot.png
+```
+
+Example workflow:
+```python
+from screenshot_utils import take_screenshot_sync
+from llm_api import query_llm
+
+# Take a screenshot
+screenshot_path = take_screenshot_sync('https://example.com', 'screenshot.png')
+
+# Verify with LLM
+response = query_llm(
+    "What is the background color and title of this webpage?",
+    provider="openai",  # or "anthropic"
+    image_path=screenshot_path
+)
+print(response)
+```
+
+## LLM
+
+You always have an LLM at your side to help you with the task. For simple tasks, you could invoke the LLM by running the following command:
+```
+venv/bin/python ./tools/llm_api.py --prompt "What is the capital of France?" --provider "anthropic"
+```
+
+The LLM API supports multiple providers:
+- OpenAI (default, model: gpt-4o)
+- Azure OpenAI (model: configured via AZURE_OPENAI_MODEL_DEPLOYMENT in .env file, defaults to gpt-4o-ms)
+- DeepSeek (model: deepseek-chat)
+- Anthropic (model: claude-3-sonnet-20240229)
+- Gemini (model: gemini-pro)
+- Local LLM (model: Qwen/Qwen2.5-32B-Instruct-AWQ)
+
+But usually it's a better idea to check the content of the file and use the APIs in the `tools/llm_api.py` file to invoke the LLM if needed.
+
+## Web browser
+
+You could use the `tools/web_scraper.py` file to scrape the web.
+```
+venv/bin/python ./tools/web_scraper.py --max-concurrent 3 URL1 URL2 URL3
+```
+This will output the content of the web pages.
+
+## Search engine
+
+You could use the `tools/search_engine.py` file to search the web.
+```
+venv/bin/python ./tools/search_engine.py "your search keywords"
+```
+This will output the search results in the following format:
+```
+URL: https://example.com
+Title: This is the title of the search result
+Snippet: This is a snippet of the search result
+```
+If needed, you can further use the `web_scraper.py` file to scrape the web page content.
+
+# Lessons
+
+## User Specified Lessons
+
+- You have a python venv in ./venv. Use it.
+- Include info useful for debugging in the program output.
+- Read the file before you try to edit it.
+- Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. Include "[Cursor] " in the commit message and PR title.
+
+## Cursor learned
+
+- For search results, ensure proper handling of different character encodings (UTF-8) for international queries
+- Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
+- When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
+- Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
+- In URDF generation for Stewart Platform:
+  - All generated names should include stage suffix (e.g., base_link1, X1bottom11 for stage 1)
+  - When comparing with original URDF, strip stage suffix to get original name
+  - For bottom links, keep both original "1" suffix and add stage number (X1bottom1 -> X1bottom11)
+  - For joints, add stage suffix (Revolute_1 -> Revolute_11)
+  - Mesh filenames should use original names from URDF (e.g., meshes/X1bottom1.stl)
+  - Format zero values as integers (0 instead of 0.0) in origin xyz/rpy attributes to match ROS URDF convention
+- When copying properties from original URDF, we need to maintain the original stage number (1) in mesh filenames while using the new stage number for component names
+- When testing XML elements in URDF, always check if the element exists (is not None) before accessing its attributes to avoid NoneType errors
+- In URDF joint testing, check both the existence of parent/child elements and their link attributes to ensure proper joint connections
+- When verifying joint properties, first check if the property exists in the original properties before asserting its presence in the generated URDF
+- Use a dedicated name manager class to handle all naming conventions in one place for better maintainability
+- When dealing with stage-based naming, ensure consistent handling of suffixes and prefixes across all components
+- Keep original naming patterns for mesh files while using stage-specific names for components
+- Never hardcode joint properties (limits, types, etc.) - always extract from original URDF
+- Joint properties must be properly propagated through the entire generation process
+- The XML structure must be validated before being used in tests
+- Debug output should show both expected and actual values for easier troubleshooting
+- When generating URDF XML:
+  - Ensure XML is well-formed by checking for truncated or duplicate tags
+  - Validate the XML string before parsing it with ElementTree
+  - Watch for line truncation in string literals that might break XML syntax
+  - Use proper XML escaping for special characters
+  - Ensure consistent indentation to make debugging easier
+- When working with XML in Python:
+  - Use `findall(".//joint[@type]")` to exclude transmission joints and get only actual joints
+  - Parse XML strings directly instead of writing to temporary files when possible
+  - Clean up XML strings by removing excessive whitespace before parsing
+  - Add debug output for XML parsing to help diagnose issues
+  - Use XML string functions (like `ET.tostring()`) to inspect elements during debugging
+- For PyBullet compatibility:
+  - Keep joint names consistent with original URDF (use Revolute_ prefix even for slider joints)
+  - Maintain joint type information in the properties but use consistent naming
+  - PyBullet expects revolute joints for counting purposes
+
+# Scratchpad
+
+## Current Task: Implementing Cylinder Connections for Stewart Platform URDF
+
+### Completed:
+[X] Fixed test_stage_naming
+[X] Fixed test_joint_consistency
+[X] Fixed XML parsing and validation
+[X] Improved property extraction from XML
+[X] Added proper debug output
+[X] Cleaned up test code
+[X] Removed temporary file usage
+[X] Implemented base link and bottom links setup
+
+### Next Steps for Cylinder Connections:
+[X] Phase 1: Cylinder Links and Joints
+  [X] Add cylinder link generation (cylinder11-61)
+  [X] Add revolute joints connecting bottom links to cylinders (Revolute_7-12)
+  [X] Add tests for cylinder link properties
+  [X] Add tests for cylinder joint connections
+  [X] Fixed naming conventions for stage suffixes
+  [X] All tests passing for Phase 1
+
+[X] Phase 2: Rod and Piston Links
+  [X] Add rod link generation (rod11-61)
+  [X] Add slider joints connecting cylinders to rods (Slider_13-18)
+  [X] Add tests for rod link properties
+  [X] Add tests for slider joint connections
+  [X] Fix PyBullet compatibility issues:
+    [X] Keep joint names as Revolute_ for PyBullet
+    [ ] Ensure rod links are properly generated
+    [ ] Fix joint properties for rod connections
+  [ ] Add piston link generation (piston11-61)
+  [ ] Add revolute joints connecting rods to pistons (Revolute_19-24)
+  [ ] Add tests for piston properties
+  [ ] Add tests for revolute joint connections
+
+[ ] Phase 3: Top Links and Universal Joints
+  - [ ] Add top link generation (X1top1-X6top1)
+  - [ ] Add revolute joints connecting pistons to top links (Revolute_25-28)
+  - [ ] Add universal joint components (UJ11-61)
+  - [ ] Add revolute joints for universal joints 
+  - [ ] Add tests for top link properties
+  - [ ] Add tests for universal joint connections
+
+[ ] Phase 4: Final Platform Components
+  - [ ] Add remaining rigid connections (Rigid_59-77)
+  - [ ] Add final platform links (TOP1, indicator1, etc.)
+  - [ ] Add tests for rigid connections
+  - [ ] Add tests for complete kinematic chain
+
+### Current Focus:
+Fixing remaining rod link issues:
+- Need to ensure rod links are properly generated and included in the URDF
+- Need to fix joint properties for rod connections
+- Will maintain proper naming conventions and debug output
+- Will add comprehensive tests for new components
+- PyBullet loading test is now passing with Revolute_ prefix for all joints
+
+### Notes:
+- Need to maintain consistent naming convention for all new components
+- Follow Link_graph.txt for correct connection hierarchy
+- Extract all properties from original Stewart.urdf
+- For bottom links, keep both original "1" suffix and stage suffix (e.g., X1bottom11)
+- For other components, just add stage suffix once
+- Mesh filenames should use original names from URDF
+- PyBullet expects revolute joints for counting purposes
