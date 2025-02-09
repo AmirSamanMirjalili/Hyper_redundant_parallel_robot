@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 import xml.etree.ElementTree as ET
 from extract_urdf_properties import extract_joint_properties, extract_link_properties
+import re
 
 @dataclass
 class Origin:
@@ -239,8 +240,19 @@ class NameManager:
 
         Returns:
             str: The name without the stage suffix.
-                 For example, if name is "cylinder2" and stage is 2, the result is "cylinder".
+                 For example:
+                 - If name is "cylinder611" and stage is 1, returns "cylinder61"
+                 - If name is "rod611" and stage is 1, returns "rod61"
+                 - If name is "X1bottom11" and stage is 1, returns "X1bottom1"
         """
+        # Handle special cases for components that already have a number suffix
+        if any(pattern in name for pattern in ['cylinder', 'rod', 'bottom']):
+            # Extract the base name without the stage suffix
+            match = re.match(r'([A-Za-z]+\d+)(\d+)', name)
+            if match:
+                return match.group(1)  # Return the base name with original number
+        
+        # For other components, just remove the stage suffix
         return name.rsplit(self.stage_suffix, 1)[0]
 
     def get_original_bottom_link_name(self, link_name: str) -> str:
@@ -366,9 +378,9 @@ class StewartPlatformURDF:
             base_name = "base_link"
         elif "bottom" in link_name:
             base_name = self.name_mgr.get_original_bottom_link_name(link_name)
-        elif "rod" in link_name:
-            # For rod links, add "1" suffix to match original URDF
-            base_name = f"{link_name.rsplit('1', 1)[0]}1"
+        elif "rod" in link_name or "cylinder" in link_name:
+            # For rod and cylinder links, strip stage suffix to get original name
+            base_name = self.name_mgr.strip_stage_suffix(link_name)
         else:
             base_name = link_name
         
@@ -502,6 +514,8 @@ class StewartPlatformURDF:
 
     def _init_cylinder_links(self):
         """Initialize the cylinder links and their revolute joints with bottom links."""
+        print("\n[Cylinder Links] Starting cylinder link initialization")
+        
         # Cylinder configurations based on Link_graph.txt and mesh files
         cylinder_configs = [
             # (cylinder_name, parent_bottom_link, joint_num)
@@ -519,9 +533,19 @@ class StewartPlatformURDF:
             joint_name = self.name_mgr.get_joint_name(joint_num)
             parent_name = self.name_mgr.get_component_name(parent_base)
             
+            print(f"\n[Cylinder Link] Processing cylinder {base_name}:")
+            print(f"  Generated names:")
+            print(f"    Link: {link_name}")
+            print(f"    Joint: {joint_name}")
+            print(f"    Parent: {parent_name}")
+            
             # Get original properties
             original_link_props = self._get_original_link_props(link_name)
             original_joint_props = self._get_original_joint_props(joint_name)
+            
+            print(f"  Original properties:")
+            print(f"    Link props found: {original_link_props is not None}")
+            print(f"    Joint props found: {original_joint_props is not None}")
             
             if original_link_props and original_joint_props:
                 # Create cylinder link
@@ -559,6 +583,7 @@ class StewartPlatformURDF:
                     )
                 )
                 self.links.append(cylinder_link)
+                print(f"  Added cylinder link: {link_name}")
 
                 # Create revolute joint connecting bottom link to cylinder
                 joint_origin = Origin(
@@ -580,15 +605,18 @@ class StewartPlatformURDF:
                     )
                 )
                 self.joints.append(joint)
-                
-                print(f"\nDebug: Generated cylinder link and joint:")
-                print(f"Link name: {link_name}")
-                print(f"Joint name: {joint_name}")
-                print(f"Parent link: {parent_name}")
-                print(f"Joint type: {joint.joint_type}")
-                print(f"Joint axis: {joint.axis}")
+                print(f"  Added joint: {joint_name} ({joint.joint_type})")
+                print(f"    Parent: {joint.parent}")
+                print(f"    Child: {joint.child}")
+                print(f"    Axis: {joint.axis}")
                 if joint.limits:
-                    print(f"Joint limits: {joint.limits}")
+                    print(f"    Limits: {joint.limits}")
+            else:
+                print(f"  ERROR: Missing properties for cylinder {base_name}")
+                if not original_link_props:
+                    print(f"    Missing link properties")
+                if not original_joint_props:
+                    print(f"    Missing joint properties")
 
     def _init_rod_links(self):
         """Initialize the rod links and their slider joints with cylinders."""
@@ -620,8 +648,8 @@ class StewartPlatformURDF:
                 # Create rod link
                 inertial_props = original_link_props.inertial
                 link_origin = Origin(
-                    tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
+                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
+                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
                 )
                 
                 rod_link = Link(
@@ -638,15 +666,15 @@ class StewartPlatformURDF:
                     ),
                     visual=Visual(
                         origin=Origin(
-                            tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
                         ),
                         geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
                     ),
                     collision=Collision(
                         origin=Origin(
-                            tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
                         ),
                         geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
                     )
@@ -655,10 +683,9 @@ class StewartPlatformURDF:
 
                 # Create slider joint connecting cylinder to rod
                 joint_origin = Origin(
-                    tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
+                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
+                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
                 )
-                
                 # Create the slider joint with explicit type and properties
                 joint = Joint(
                     name=joint_name,  # Using NameManager's joint name (Slider_XX)
