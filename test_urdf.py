@@ -18,6 +18,10 @@ def urdf_properties():
     original_joint_props = {**original_revolute_props, **original_slider_props}
     original_link_props = extract_link_properties('Stewart.urdf')
     
+    print("\nOriginal Link Properties:")
+    print(f"Number of links: {len(original_link_props)}")
+    print(f"Link names: {sorted(original_link_props.keys())}")
+    
     # Generate our URDF
     generated_urdf = generate_stewart_platform(stage=1)
     
@@ -29,6 +33,17 @@ def urdf_properties():
     generated_slider_props = extract_joint_properties(generated_urdf, "Slider_")
     generated_joint_props = {**generated_revolute_props, **generated_slider_props}
     generated_link_props = extract_link_properties(generated_urdf)
+    
+    print("\nGenerated Link Properties:")
+    print(f"Number of links: {len(generated_link_props)}")
+    print(f"Link names: {sorted(generated_link_props.keys())}")
+    
+    # Check for missing links
+    original_cylinders = [name for name in original_link_props.keys() if 'cylinder' in name]
+    generated_cylinders = [name for name in generated_link_props.keys() if 'cylinder' in name]
+    print("\nCylinder Links:")
+    print(f"Original cylinders: {sorted(original_cylinders)}")
+    print(f"Generated cylinders: {sorted(generated_cylinders)}")
     
     return {
         'original': {
@@ -134,8 +149,8 @@ def map_to_original_name(generated_name: str, name_manager: NameManager) -> str:
     Examples:
         base_link1 -> base_link
         X1bottom11 -> X1bottom1  (stage 1 suffix removed)
-        cylinder111 -> cylinder11 (stage 1 suffix removed)
-        rod111 -> rod11 (stage 1 suffix removed)
+        cylinder611 -> cylinder61 (stage 1 suffix removed)
+        rod611 -> rod61 (stage 1 suffix removed)
         Revolute_11 -> Revolute_1
     """
     # Handle special case for base link
@@ -144,7 +159,10 @@ def map_to_original_name(generated_name: str, name_manager: NameManager) -> str:
     
     # For components that already have a number suffix in original URDF
     if any(pattern in generated_name for pattern in ['bottom', 'cylinder', 'rod']):
-        return generated_name[:-1]  # Remove stage suffix
+        # Extract the base name without the stage suffix
+        match = re.match(r'([A-Za-z]+\d+)(\d+)', generated_name)
+        if match:
+            return match.group(1)  # Return the base name with original number
     
     # For joints and other components
     if generated_name.endswith('1'):  # Stage 1
@@ -611,12 +629,12 @@ def test_cylinder_links(urdf_properties, name_manager):
     
     # Test each cylinder link using exact names from mesh files
     cylinder_configs = [
-        ("cylinder11", "X6bottom1"),  # Use exact names from mesh files
-        ("cylinder51", "X5bottom1"),
-        ("cylinder11", "X1bottom1"),
-        ("cylinder21", "X2bottom1"),
-        ("cylinder31", "X3bottom1"),
-        ("cylinder41", "X4bottom1")
+        ("cylinder61", "X6bottom1"),  # Use exact name from cylinder61.stl
+        ("cylinder51", "X5bottom1"),  # Use exact name from cylinder51.stl
+        ("cylinder11", "X1bottom1"),  # Use exact name from cylinder11.stl
+        ("cylinder21", "X2bottom1"),  # Use exact name from cylinder21.stl
+        ("cylinder31", "X3bottom1"),  # Use exact name from cylinder31.stl
+        ("cylinder41", "X4bottom1")   # Use exact name from cylinder41.stl
     ]
     
     for base_name, parent_base in cylinder_configs:
@@ -627,6 +645,8 @@ def test_cylinder_links(urdf_properties, name_manager):
         print(f"\nTesting cylinder link: {link_name}")
         print(f"Original name: {base_name}")
         print(f"Parent link: {parent_name}")
+        print(f"Generated properties keys: {list(generated_props.keys())}")  # Debug output
+        print(f"Original properties keys: {list(original_props.keys())}")    # Debug output
         
         assert link_name in generated_props, f"Cylinder link {link_name} should exist"
         assert base_name in original_props, f"Original cylinder link {base_name} should exist"
