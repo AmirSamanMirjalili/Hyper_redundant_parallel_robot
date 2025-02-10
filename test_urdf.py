@@ -739,12 +739,12 @@ def test_cylinder_kinematic_chain(urdf_properties, name_manager):
     
     # Check each bottom link to cylinder connection
     connections = [
-        ("X6bottom", "cylinder6"),
-        ("X5bottom", "cylinder5"),
-        ("X1bottom", "cylinder1"),
-        ("X2bottom", "cylinder2"),
-        ("X3bottom", "cylinder3"),
-        ("X4bottom", "cylinder4")
+        ("X6bottom1", "cylinder61"),
+        ("X5bottom1", "cylinder51"),
+        ("X1bottom1", "cylinder11"),
+        ("X2bottom1", "cylinder21"),
+        ("X3bottom1", "cylinder31"),
+        ("X4bottom1", "cylinder41")
     ]
     
     for parent_base, child_base in connections:
