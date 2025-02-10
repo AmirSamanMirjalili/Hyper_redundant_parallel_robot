@@ -75,3 +75,5 @@ joint_properties.json
 __pycache__/extract_urdf_properties.cpython-39.pyc
 __pycache__/generate_urdf.cpython-39.pyc
 __pycache__/test_urdf.cpython-39-pytest-8.3.4.pyc
+__pycache__/test_urdf.cpython-39-pytest-8.3.4.pyc
+__pycache__/generate_urdf.cpython-39.pyc
