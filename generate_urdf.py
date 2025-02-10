@@ -303,7 +303,7 @@ class StewartPlatformURDF:
         """
         self.stage = stage
         self.base_z = base_z
-        self.name_mgr = NameManager(stage, base_prefix)
+        self.name_manager = NameManager(stage, base_prefix)
         
         # Load properties from original URDF
         self.original_joint_props = extract_joint_properties("Stewart.urdf")  # Remove Revolute_ prefix to load all joints
@@ -316,6 +316,7 @@ class StewartPlatformURDF:
         self._init_bottom_links()
         self._init_cylinder_links()
         self._init_rod_links()
+        self._init_piston_links()
 
     def _apply_z_offset(self, origin: Origin) -> Origin:
         """Apply the base_z offset to an origin."""
@@ -328,7 +329,7 @@ class StewartPlatformURDF:
         """Get properties of a joint from the original URDF."""
         try:
             # Extract the joint number and create the original name
-            base_name = self.name_mgr.strip_stage_suffix(joint_name)
+            base_name = self.name_manager.strip_stage_suffix(joint_name)
             
             # Handle both Revolute_ and Slider_ prefixes
             if base_name.startswith('Slider_'):
@@ -354,14 +355,14 @@ class StewartPlatformURDF:
                 
                 # Update parent/child links to use stage-appropriate names
                 if props.parent == "base_link":
-                    props.parent = self.name_mgr.get_base_link_name()
+                    props.parent = self.name_manager.get_base_link_name()
                 else:
-                    props.parent = self.name_mgr.get_component_name(props.parent)
+                    props.parent = self.name_manager.get_component_name(props.parent)
                     
                 if "bottom" in props.child:
-                    props.child = self.name_mgr.get_component_name(props.child.rsplit('1', 1)[0])
+                    props.child = self.name_manager.get_component_name(props.child.rsplit('1', 1)[0])
                 else:
-                    props.child = self.name_mgr.get_component_name(props.child)
+                    props.child = self.name_manager.get_component_name(props.child)
                 
                 return props
             
@@ -377,10 +378,10 @@ class StewartPlatformURDF:
         if "base_link" in link_name:
             base_name = "base_link"
         elif "bottom" in link_name:
-            base_name = self.name_mgr.get_original_bottom_link_name(link_name)
+            base_name = self.name_manager.get_original_bottom_link_name(link_name)
         elif "rod" in link_name or "cylinder" in link_name:
             # For rod and cylinder links, strip stage suffix to get original name
-            base_name = self.name_mgr.strip_stage_suffix(link_name)
+            base_name = self.name_manager.strip_stage_suffix(link_name)
         else:
             base_name = link_name
         
@@ -392,14 +393,14 @@ class StewartPlatformURDF:
 
     def _init_base_link(self):
         """Initialize the base link of the Stewart platform."""
-        base_link_name = self.name_mgr.get_base_link_name()
+        base_link_name = self.name_manager.get_base_link_name()
         original_props = self._get_original_link_props("base_link")
         
         if original_props:
             inertial_props = original_props.inertial
             base_origin = Origin(
-                tuple(map(float, inertial_props['origin']['xyz'].split())),
-                tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
+                xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
+                rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
             )
             if self.base_z:
                 base_origin = self._apply_z_offset(base_origin)
@@ -418,11 +419,11 @@ class StewartPlatformURDF:
                 ),
                 visual=Visual(
                     origin=self._apply_z_offset(Origin((0, 0, 0))),
-                    geometry=Geometry(self.name_mgr.get_mesh_filename("base_link"))
+                    geometry=Geometry(self.name_manager.get_mesh_filename("base_link"))
                 ),
                 collision=Collision(
                     origin=self._apply_z_offset(Origin((0, 0, 0))),
-                    geometry=Geometry(self.name_mgr.get_mesh_filename("base_link"))
+                    geometry=Geometry(self.name_manager.get_mesh_filename("base_link"))
                 )
             )
             self.links.append(base_link)
@@ -442,8 +443,8 @@ class StewartPlatformURDF:
 
         for base_name, joint_num in bottom_configs:
             # Generate names for this stage
-            link_name = self.name_mgr.get_component_name(base_name)
-            joint_name = self.name_mgr.get_joint_name(joint_num)
+            link_name = self.name_manager.get_component_name(base_name)
+            joint_name = self.name_manager.get_joint_name(joint_num)
             
             # Get original properties
             original_link_props = self._get_original_link_props(link_name)
@@ -453,8 +454,8 @@ class StewartPlatformURDF:
                 # Create link
                 inertial_props = original_link_props.inertial
                 link_origin = Origin(
-                    tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
+                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
+                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
                 )
                 
                 # Create the link
@@ -472,41 +473,41 @@ class StewartPlatformURDF:
                     ),
                     visual=Visual(
                         origin=Origin(
-                            tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     ),
                     collision=Collision(
                         origin=Origin(
-                            tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     )
                 )
                 self.links.append(bottom_link)
 
                 # Create joint with explicit parent and child links
                 joint_origin = Origin(
-                    tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
+                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
+                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
                 )
                 
                 # Set parent and child links explicitly
-                parent_link = self.name_mgr.get_base_link_name()  # All bottom links connect to base_link
+                parent_link = self.name_manager.get_base_link_name()  # All bottom links connect to base_link
                 child_link = link_name  # The bottom link we just created
                 
                 joint = Joint(
                     name=joint_name,
-                    joint_type=original_joint_props.joint_type,
+                    joint_type=original_joint_props.joint_type,  # Use attribute access
                     parent=parent_link,
                     child=child_link,
                     origin=joint_origin,
                     axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,
+                    limits=original_joint_props.limits,  # Use attribute access
                     transmission=Transmission(
-                        self.name_mgr.get_transmission_name(joint_name),
+                        self.name_manager.get_transmission_name(joint_name),
                         joint_name
                     )
                 )
@@ -529,9 +530,9 @@ class StewartPlatformURDF:
 
         for base_name, parent_base, joint_num in cylinder_configs:
             # Generate names for this stage using NameManager
-            link_name = self.name_mgr.get_component_name(base_name)
-            joint_name = self.name_mgr.get_joint_name(joint_num)
-            parent_name = self.name_mgr.get_component_name(parent_base)
+            link_name = self.name_manager.get_component_name(base_name)
+            joint_name = self.name_manager.get_joint_name(joint_num)
+            parent_name = self.name_manager.get_component_name(parent_base)
             
             print(f"\n[Cylinder Link] Processing cylinder {base_name}:")
             print(f"  Generated names:")
@@ -551,8 +552,8 @@ class StewartPlatformURDF:
                 # Create cylinder link
                 inertial_props = original_link_props.inertial
                 link_origin = Origin(
-                    tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
+                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
+                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
                 )
                 
                 cylinder_link = Link(
@@ -569,17 +570,17 @@ class StewartPlatformURDF:
                     ),
                     visual=Visual(
                         origin=Origin(
-                            tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     ),
                     collision=Collision(
                         origin=Origin(
-                            tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
+                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
+                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     )
                 )
                 self.links.append(cylinder_link)
@@ -587,20 +588,20 @@ class StewartPlatformURDF:
 
                 # Create revolute joint connecting bottom link to cylinder
                 joint_origin = Origin(
-                    tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
+                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
+                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
                 )
                 
                 joint = Joint(
                     name=joint_name,
-                    joint_type=original_joint_props.joint_type,
+                    joint_type=original_joint_props.joint_type,  # Use attribute access
                     parent=parent_name,
                     child=link_name,
                     origin=joint_origin,
                     axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,
+                    limits=original_joint_props.limits,  # Use attribute access
                     transmission=Transmission(
-                        self.name_mgr.get_transmission_name(joint_name),
+                        self.name_manager.get_transmission_name(joint_name),
                         joint_name
                     )
                 )
@@ -633,9 +634,9 @@ class StewartPlatformURDF:
 
         for base_name, parent_base, joint_num in rod_configs:
             # Generate names for this stage using NameManager
-            link_name = self.name_mgr.get_component_name(base_name)
-            joint_name = self.name_mgr.get_joint_name(joint_num)  # Will return Slider_XX for these joints
-            parent_name = self.name_mgr.get_component_name(parent_base)
+            link_name = self.name_manager.get_component_name(base_name)
+            joint_name = self.name_manager.get_joint_name(joint_num)  # Will return Slider_XX for these joints
+            parent_name = self.name_manager.get_component_name(parent_base)
             
             print(f"\n[Rod Joint] Processing joint {joint_num}:")
             print(f"[Rod Joint] Generated names: joint={joint_name}, link={link_name}, parent={parent_name}")
@@ -669,14 +670,14 @@ class StewartPlatformURDF:
                             xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
                             rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     ),
                     collision=Collision(
                         origin=Origin(
                             xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
                             rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
                         ),
-                        geometry=Geometry(self.name_mgr.get_mesh_filename(base_name))
+                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
                     )
                 )
                 self.links.append(rod_link)
@@ -689,19 +690,119 @@ class StewartPlatformURDF:
                 # Create the slider joint with explicit type and properties
                 joint = Joint(
                     name=joint_name,  # Using NameManager's joint name (Slider_XX)
-                    joint_type="prismatic",  # Explicitly set to prismatic for slider joints
+                    joint_type=original_joint_props.joint_type,  # Use attribute access
                     parent=parent_name,
                     child=link_name,
                     origin=joint_origin,
                     axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,
+                    limits=original_joint_props.limits,  # Use attribute access
                     transmission=Transmission(
-                        self.name_mgr.get_transmission_name(joint_name),
+                        self.name_manager.get_transmission_name(joint_name),
                         joint_name
                     )
                 )
                 print(f"[Rod Joint] Created joint: name={joint.name}, type={joint.joint_type}, parent={joint.parent}, child={joint.child}")
                 self.joints.append(joint)
+
+    def _init_piston_links(self):
+        """Initialize piston links and their revolute joints."""
+        print("\n[Piston Links] Initializing piston links and joints...")
+        
+        # Get original properties
+        original_link_props = extract_link_properties('Stewart.urdf')
+        original_joint_props = extract_joint_properties('Stewart.urdf', "Revolute_")
+
+        # Configure piston links
+        piston_configs = [
+            ("piston11", "rod11", 19),
+            ("piston21", "rod21", 20),
+            ("piston31", "rod31", 21),
+            ("piston61", "rod61", 22),
+            ("piston51", "rod51", 23),
+            ("piston41", "rod41", 24)
+        ]
+
+        for base_name, parent_base, joint_num in piston_configs:
+            print(f"\n[Piston Link] Processing piston {base_name}:")
+            
+            # Get original properties
+            orig_props = original_link_props[base_name]
+            joint_props = original_joint_props[f"Revolute_{joint_num}"]
+
+            # Generate names using name manager
+            link_name = self.name_manager.get_component_name(base_name)
+            parent_name = self.name_manager.get_component_name(parent_base)
+            joint_name = self.name_manager.get_joint_name(joint_num)
+            
+            print(f"  Link name: {link_name}")
+            print(f"  Parent: {parent_name}")
+            print(f"  Joint: {joint_name}")
+
+            # Create link
+            link = Link(
+                name=link_name,
+                inertial=Inertial(
+                    origin=Origin(
+                        xyz=tuple(map(float, orig_props.inertial['origin']['xyz'].split())),
+                        rpy=tuple(map(float, orig_props.inertial['origin']['rpy'].split()))
+                    ),
+                    mass=float(orig_props.inertial['mass']),
+                    ixx=float(orig_props.inertial['ixx']),
+                    iyy=float(orig_props.inertial['iyy']),
+                    izz=float(orig_props.inertial['izz']),
+                    ixy=float(orig_props.inertial['ixy']),
+                    iyz=float(orig_props.inertial['iyz']),
+                    ixz=float(orig_props.inertial['ixz'])
+                ),
+                visual=Visual(
+                    origin=Origin(
+                        xyz=tuple(map(float, orig_props.visual['origin']['xyz'].split())),
+                        rpy=tuple(map(float, orig_props.visual['origin']['rpy'].split()))
+                    ),
+                    geometry=Geometry(
+                        mesh_filename=f"meshes/{base_name}.stl",
+                        scale=(0.001, 0.001, 0.001)
+                    )
+                ),
+                collision=Collision(
+                    origin=Origin(
+                        xyz=tuple(map(float, orig_props.visual['origin']['xyz'].split())),
+                        rpy=tuple(map(float, orig_props.visual['origin']['rpy'].split()))
+                    ),
+                    geometry=Geometry(
+                        mesh_filename=f"meshes/{base_name}.stl",
+                        scale=(0.001, 0.001, 0.001)
+                    )
+                )
+            )
+            print(f"  Created link with mesh: meshes/{base_name}.stl")
+
+            # Create joint
+            joint = Joint(
+                name=joint_name,
+                joint_type=joint_props.joint_type,  # Use attribute access
+                parent=parent_name,
+                child=link_name,
+                origin=Origin(
+                    xyz=tuple(map(float, joint_props.origin['xyz'].split())),
+                    rpy=tuple(map(float, joint_props.origin['rpy'].split()))
+                ),
+                axis=tuple(map(float, joint_props.axis.split())),
+                limits=joint_props.limits  # Use attribute access
+            )
+            print(f"  Created joint: name={joint.name}, type={joint.joint_type}, parent={joint.parent}, child={joint.child}")
+
+            # Add transmission for revolute joint
+            joint.transmission = Transmission(
+                name=self.name_manager.get_transmission_name(joint_name),
+                joint_name=joint_name
+            )
+            print(f"  Added transmission: {joint.transmission.name}")
+
+            # Add to URDF
+            self.links.append(link)
+            self.joints.append(joint)
+            print(f"  Added link and joint to URDF")
 
     def generate(self) -> str:
         """Generate the URDF XML string."""
