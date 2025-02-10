@@ -547,8 +547,8 @@ def test_connection_attributes(urdf_properties, link_graph_data, name_manager):
             if "bottom1" in child:
                 # For bottom links, keep both original "1" suffix and stage suffix
                 stage1_child = name_manager.get_component_name(child)
-            elif any(x in child for x in ["cylinder", "rod"]):
-                # For cylinders and rods, keep original name and add stage suffix
+            elif any(x in child for x in ["cylinder", "rod", "piston"]):
+                # For cylinders, rods, and pistons, keep original name and add stage suffix
                 stage1_child = name_manager.get_component_name(child)
             else:
                 # For other components, strip original suffix if present
@@ -854,4 +854,102 @@ def test_rod_links(urdf_properties, name_manager):
         # Verify collision properties
         assert link.collision is not None, f"Link {link_name} should have collision properties"
         assert link.collision['mesh'] == f"meshes/{base_name}.stl", \
-            f"Link {link_name} should have correct collision mesh file" 
+            f"Link {link_name} should have correct collision mesh file"
+
+def test_piston_links(urdf_properties, name_manager):
+    """Test if piston links are correctly generated"""
+    original_props = urdf_properties['original']['links']
+    generated_props = urdf_properties['generated']['links']
+    
+    # Test each piston link
+    piston_configs = [
+        "piston11", "piston21", "piston31",
+        "piston41", "piston51", "piston61"
+    ]
+    
+    for base_name in piston_configs:
+        # Generate names using NameManager
+        link_name = name_manager.get_component_name(base_name)
+        
+        print(f"\nTesting piston link: {base_name} -> {link_name}")
+        
+        assert link_name in generated_props, f"Piston link {link_name} should exist"
+        assert base_name in original_props, f"Original piston link {base_name} should exist"
+        
+        gen_link = generated_props[link_name]
+        orig_link = original_props[base_name]
+        
+        # Verify inertial properties
+        assert gen_link.inertial is not None, f"Link {link_name} should have inertial properties"
+        assert orig_link.inertial is not None, f"Original link {base_name} should have inertial properties"
+        
+        # Compare inertial values
+        assert float(gen_link.inertial['mass']) == float(orig_link.inertial['mass']), \
+            f"Link {link_name} should have correct mass"
+        
+        for prop in ['ixx', 'iyy', 'izz', 'ixy', 'iyz', 'ixz']:
+            assert float(gen_link.inertial[prop]) == float(orig_link.inertial[prop]), \
+                f"Link {link_name} should have correct {prop}"
+        
+        # Verify visual properties
+        assert gen_link.visual is not None, f"Link {link_name} should have visual properties"
+        assert gen_link.visual['mesh'] == f"meshes/{base_name}.stl", \
+            f"Link {link_name} should have correct mesh file"
+        
+        # Verify collision properties
+        assert gen_link.collision is not None, f"Link {link_name} should have collision properties"
+        assert gen_link.collision['mesh'] == f"meshes/{base_name}.stl", \
+            f"Link {link_name} should have correct collision mesh file"
+
+def test_rod_piston_joints(urdf_properties, name_manager):
+    """Test if joints connecting rods to pistons are correct"""
+    generated_joints = urdf_properties['generated']['joints']
+    original_joints = urdf_properties['original']['joints']
+    
+    # Test revolute joints connecting rods to pistons (Revolute_19-24)
+    joint_configs = [
+        (19, "rod11", "piston11"),
+        (20, "rod21", "piston21"),
+        (21, "rod31", "piston31"),
+        (22, "rod61", "piston61"),
+        (23, "rod51", "piston51"),
+        (24, "rod41", "piston41")
+    ]
+    
+    for joint_num, parent_base, child_base in joint_configs:
+        # Generate names using NameManager
+        joint_name = name_manager.get_joint_name(joint_num)
+        parent_name = name_manager.get_component_name(parent_base)
+        child_name = name_manager.get_component_name(child_base)
+        base_joint_name = f"Revolute_{joint_num}"
+        
+        print(f"\nTesting rod-piston joint: {joint_name}")
+        print(f"  Parent: {parent_base} -> {parent_name}")
+        print(f"  Child: {child_base} -> {child_name}")
+        
+        assert joint_name in generated_joints, f"Joint {joint_name} should exist"
+        
+        joint = generated_joints[joint_name]
+        orig_joint = original_joints[base_joint_name]
+        
+        # Verify parent-child relationship
+        assert joint.parent == parent_name, \
+            f"Joint {joint_name} should have parent {parent_name}"
+        assert joint.child == child_name, \
+            f"Joint {joint_name} should have child {child_name}"
+        
+        # Verify joint properties
+        assert joint.joint_type == orig_joint.joint_type, \
+            f"Joint {joint_name} should be {orig_joint.joint_type}"
+        assert joint.axis == orig_joint.axis, \
+            f"Joint {joint_name} should have correct axis"
+        
+        # Verify limits if they exist
+        if orig_joint.limits:
+            assert joint.limits is not None, \
+                f"Joint {joint_name} should have limits"
+            for prop in ['upper', 'lower', 'effort', 'velocity']:
+                assert float(joint.limits[prop]) == float(orig_joint.limits[prop]), \
+                    f"Joint {joint_name} {prop} limit should match"
+
+        assert joint_name in generated_joints, f"Joint {joint_name} should exist" 
