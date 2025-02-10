@@ -533,17 +533,36 @@ def test_connection_attributes(urdf_properties, link_graph_data, name_manager):
     # Test implemented joints
     for parent, connections in link_graph_data.items():
         for joint_name, child in connections:
+            print(f"\nTesting connection: {parent} -> {child} via {joint_name}")
+            
             # Extract joint number and create stage 1 joint name
             joint_num = int(joint_name.split('_')[1])
             stage1_joint = name_manager.get_joint_name(joint_num)
+            print(f"  Joint mapping: {joint_name} -> {stage1_joint}")
             
             # Add stage suffix to parent and child names
             stage1_parent = name_manager.get_component_name(parent)
-            stage1_child = name_manager.get_component_name(child.rsplit('1', 1)[0])  # Remove original suffix if present
+            
+            # Handle different component types
+            if "bottom1" in child:
+                # For bottom links, keep both original "1" suffix and stage suffix
+                stage1_child = name_manager.get_component_name(child)
+            elif any(x in child for x in ["cylinder", "rod"]):
+                # For cylinders and rods, keep original name and add stage suffix
+                stage1_child = name_manager.get_component_name(child)
+            else:
+                # For other components, strip original suffix if present
+                stage1_child = name_manager.get_component_name(child.rsplit('1', 1)[0])
+            
+            print(f"  Parent mapping: {parent} -> {stage1_parent}")
+            print(f"  Child mapping: {child} -> {stage1_child}")
             
             if stage1_joint in generated_joints:
                 gen_props = generated_joints[stage1_joint]
                 orig_props = original_joints.get(joint_name)
+                
+                print(f"  Generated joint properties found: {gen_props is not None}")
+                print(f"  Original joint properties found: {orig_props is not None}")
                 
                 if orig_props:
                     # Verify joint type
@@ -552,9 +571,9 @@ def test_connection_attributes(urdf_properties, link_graph_data, name_manager):
                     
                     # Verify parent-child relationship
                     assert gen_props.parent == stage1_parent, \
-                        f"Joint {stage1_joint} should have parent {stage1_parent}"
+                        f"Joint {stage1_joint} should have parent {stage1_parent}, got {gen_props.parent}"
                     assert gen_props.child == stage1_child, \
-                        f"Joint {stage1_joint} should have child {stage1_child}"
+                        f"Joint {stage1_joint} should have child {stage1_child}, got {gen_props.child}"
                     
                     # Verify axis
                     assert gen_props.axis == orig_props.axis, \
@@ -567,6 +586,8 @@ def test_connection_attributes(urdf_properties, link_graph_data, name_manager):
                         for prop in ['upper', 'lower', 'effort', 'velocity']:
                             assert gen_props.limits[prop] == orig_props.limits[prop], \
                                 f"Joint {stage1_joint} should have correct {prop} limit"
+                    
+                    print(f"  All properties verified successfully for joint {stage1_joint}")
 
 def test_no_floating_links(urdf_properties):
     """Test that all links (except base) are connected by joints"""
