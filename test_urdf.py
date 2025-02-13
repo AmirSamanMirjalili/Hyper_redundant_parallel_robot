@@ -39,6 +39,12 @@ class URDFTestFixture:
             if match:
                 return match.group(1)  # Return the base name with original number
         
+        # For J*T and J*B links, they already have the correct number in their name
+        if any(pattern in generated_name for pattern in ['J1T1', 'J2T1', 'J3T_1', 'J4T1', 'J5T_1', 'J6T1',
+                                                       'J1B_1', 'J2B1', 'J3B1', 'J4B1', 'J5B1', 'J6B1']):
+            # Remove the stage suffix
+            return generated_name[:-1]
+        
         # For joints and other components
         if generated_name.endswith('1'):  # Stage 1
             return generated_name[:-1]
@@ -49,15 +55,15 @@ class URDFTestFixture:
         """Verify joint properties match expected values."""
         if joint_name is None:
             joint_name = joint.get('name')
-            
+        
         # Skip joints without a type (transmission joints)
         if joint.get('type') is None:
             return
-            
+        
         # Check type
         assert joint.get('type') == expected_props['type'], \
             f"Joint {joint_name} type mismatch: {joint.get('type')} != {expected_props['type']}"
-        
+    
         # Check origin
         origin = joint.find('origin')
         assert origin is not None, f"Joint {joint_name} missing origin"
@@ -65,13 +71,13 @@ class URDFTestFixture:
             f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {expected_props['origin']['xyz']}"
         assert origin.get('rpy') == expected_props['origin']['rpy'], \
             f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {expected_props['origin']['rpy']}"
-        
+    
         # Check axis
         axis = joint.find('axis')
         assert axis is not None, f"Joint {joint_name} missing axis"
         assert axis.get('xyz') == expected_props['axis'], \
             f"Joint {joint_name} axis mismatch: {axis.get('xyz')} != {expected_props['axis']}"
-        
+    
         # Check limits if expected
         if 'limits' in expected_props:
             limit = joint.find('limit')
@@ -130,13 +136,16 @@ class KinematicChainFixture(URDFTestFixture):
         # Verify the joint has all required elements
         assert joint.find('origin') is not None, \
             f"Joint connecting {parent_name} to {child_name} should have origin"
-        assert joint.find('axis') is not None, \
-            f"Joint connecting {parent_name} to {child_name} should have axis"
         
-        # Only check for limits if the joint is not continuous
-        if joint.get('type') != 'continuous':
-            assert joint.find('limit') is not None, \
-                f"Joint connecting {parent_name} to {child_name} should have limits"
+        # Only check for axis and limits on movable joints (not fixed)
+        if joint_type not in ['fixed']:
+            assert joint.find('axis') is not None, \
+                f"Joint connecting {parent_name} to {child_name} should have axis"
+            
+            # Only check for limits if the joint is not continuous
+            if joint.get('type') != 'continuous':
+                assert joint.find('limit') is not None, \
+                    f"Joint connecting {parent_name} to {child_name} should have limits"
 
 @pytest.fixture(scope="module")
 def urdf_data() -> URDFTestData:
@@ -144,7 +153,12 @@ def urdf_data() -> URDFTestData:
     # Extract properties from original URDF
     original_revolute_props = extract_joint_properties('Stewart.urdf', "Revolute_")
     original_slider_props = extract_joint_properties('Stewart.urdf', "Slider_")
-    original_joint_props = {**original_revolute_props, **original_slider_props}
+    original_rigid_props = extract_joint_properties('Stewart.urdf', "Rigid_")
+    original_joint_props = {
+        **original_revolute_props,
+        **original_slider_props,
+        **original_rigid_props
+    }
     original_link_props = extract_link_properties('Stewart.urdf')
     
     # Generate our URDF
@@ -154,7 +168,12 @@ def urdf_data() -> URDFTestData:
     # Extract properties from generated URDF
     generated_revolute_props = extract_joint_properties(generated_urdf, "Revolute_")
     generated_slider_props = extract_joint_properties(generated_urdf, "Slider_")
-    generated_joint_props = {**generated_revolute_props, **generated_slider_props}
+    generated_rigid_props = extract_joint_properties(generated_urdf, "Rigid_")
+    generated_joint_props = {
+        **generated_revolute_props,
+        **generated_slider_props,
+        **generated_rigid_props
+    }
     generated_link_props = extract_link_properties(generated_urdf)
     
     return URDFTestData(
@@ -304,7 +323,7 @@ class TestCylinderLinks:
                 f"Joint {joint_name} should be {orig_joint.joint_type}"
             assert joint.axis == orig_joint.axis, \
                 f"Joint {joint_name} should have correct axis"
-
+        
 class TestRodLinks:
     """Tests for rod links and their connections."""
     def test_rod_links(self, test_fixture: URDFTestFixture):
@@ -340,7 +359,7 @@ class TestRodLinks:
                 f"Joint {joint_name} should be {orig_joint.joint_type}"
             assert joint.axis == orig_joint.axis, \
                 f"Joint {joint_name} should have correct axis"
-
+        
 class TestPistonLinks:
     """Tests for piston links and their connections."""
     def test_piston_links(self, test_fixture: URDFTestFixture):
@@ -379,7 +398,7 @@ class TestPistonLinks:
                 f"Joint {joint_name} should be {orig_joint.joint_type}"
             assert joint.axis == orig_joint.axis, \
                 f"Joint {joint_name} should have correct axis"
-
+        
 class TestTopLinks:
     """Tests for top links and their connections."""
     def test_top_links(self, test_fixture: URDFTestFixture):
@@ -457,6 +476,211 @@ class TestUniversalJoints:
                 f"Joint {joint_name} should be {orig_joint.joint_type}"
             assert joint.axis == orig_joint.axis, \
                 f"Joint {joint_name} should have correct axis"
+        
+class TestJBLinks:
+    """Tests for J*B links and their rigid connections."""
+    def test_jb_links(self, test_fixture: URDFTestFixture):
+        """Test if J*B links are correctly generated."""
+        jb_configs = [
+            "J1B_1", "J2B1", "J3B1",
+            "J4B1", "J5B1", "J6B1"
+        ]
+        for base_name in jb_configs:
+            test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
+
+    def test_jb_rigid_connections(self, test_fixture: URDFTestFixture):
+        """Test if J*B links are correctly connected to universal joints with rigid joints."""
+        joint_configs = [
+            (59, "UJ11", "J1B_1"),
+            (60, "UJ21", "J2B1"),
+            (61, "UJ31", "J3B1"),
+            (62, "UJ41", "J4B1"),
+            (63, "UJ51", "J5B1"),
+            (64, "UJ61", "J6B1")
+        ]
+        
+        for joint_num, parent_base, child_base in joint_configs:
+            # Generated joint name includes stage suffix
+            joint_name = f"Rigid_{joint_num}{test_fixture.name_manager.stage}"
+            # Original joint name doesn't have stage suffix
+            orig_joint_name = f"Rigid_{joint_num}"
+            
+            parent_name = test_fixture.name_manager.get_component_name(parent_base)
+            child_name = test_fixture.name_manager.get_component_name(child_base)
+            
+            # Find the joint in the XML
+            joint = None
+            for j in test_fixture.generated_root.findall(".//joint[@type='fixed']"):
+                if (j.get('name') == joint_name and
+                    j.find('parent').get('link') == parent_name and
+                    j.find('child').get('link') == child_name):
+                    joint = j
+                    break
+            
+            assert joint is not None, \
+                f"Should find rigid joint {joint_name} connecting {parent_name} to {child_name}"
+            
+            # Verify joint properties using original joint name
+            orig_props = test_fixture.original_joints[orig_joint_name]
+            
+            # Check origin
+            origin = joint.find('origin')
+            assert origin is not None, f"Joint {joint_name} missing origin"
+            assert origin.get('xyz') == orig_props.origin['xyz'], \
+                f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
+            assert origin.get('rpy') == orig_props.origin['rpy'], \
+                f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
+
+class TestJTLinks:
+    """Tests for J*T links and their rigid connections."""
+    def test_jt_links(self, test_fixture: URDFTestFixture):
+        """Test if J*T links are correctly generated."""
+        jt_configs = [
+            "J6T1",  # First one connects to J6B1
+            "J1T1", "J2T1", "J3T_1",  # Note: J3T_1 has underscore
+            "J4T1", "J5T_1"  # Note: J5T_1 has underscore
+        ]
+        for base_name in jt_configs:
+            test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
+
+    def test_jt_rigid_connections(self, test_fixture: URDFTestFixture):
+        """Test if J*T links are correctly connected with rigid joints."""
+        # First test J6T1 connection to J6B1
+        j6t_config = (65, "J6B1", "J6T1")
+        joint_name = f"Rigid_{j6t_config[0]}{test_fixture.name_manager.stage}"
+        orig_joint_name = f"Rigid_{j6t_config[0]}"
+        parent_name = test_fixture.name_manager.get_component_name(j6t_config[1])
+        child_name = test_fixture.name_manager.get_component_name(j6t_config[2])
+        
+        # Find the joint in the XML
+        joint = None
+        for j in test_fixture.generated_root.findall(".//joint[@type='fixed']"):
+            if (j.get('name') == joint_name and
+                j.find('parent').get('link') == parent_name and
+                j.find('child').get('link') == child_name):
+                joint = j
+                break
+        
+        assert joint is not None, \
+            f"Should find rigid joint {joint_name} connecting {parent_name} to {child_name}"
+        
+        # Verify joint properties using original joint name
+        orig_props = test_fixture.original_joints[orig_joint_name]
+        
+        # Check origin
+        origin = joint.find('origin')
+        assert origin is not None, f"Joint {joint_name} missing origin"
+        assert origin.get('xyz') == orig_props.origin['xyz'], \
+            f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
+        assert origin.get('rpy') == orig_props.origin['rpy'], \
+            f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
+
+        # Test connections from TOP1 to other J*T links
+        jt_configs = [
+            (67, "TOP1", "J1T1"),
+            (68, "TOP1", "J2T1"),
+            (69, "TOP1", "J3T_1"),  # Note: J3T_1 has underscore
+            (70, "TOP1", "J4T1"),
+            (71, "TOP1", "J5T_1")   # Note: J5T_1 has underscore
+        ]
+        
+        for joint_num, parent_base, child_base in jt_configs:
+            joint_name = f"Rigid_{joint_num}{test_fixture.name_manager.stage}"
+            orig_joint_name = f"Rigid_{joint_num}"
+            parent_name = test_fixture.name_manager.get_component_name(parent_base)
+            child_name = test_fixture.name_manager.get_component_name(child_base)
+            
+            # Find the joint in the XML
+            joint = None
+            for j in test_fixture.generated_root.findall(".//joint[@type='fixed']"):
+                if (j.get('name') == joint_name and
+                    j.find('parent').get('link') == parent_name and
+                    j.find('child').get('link') == child_name):
+                    joint = j
+                    break
+            
+            assert joint is not None, \
+                f"Should find rigid joint {joint_name} connecting {parent_name} to {child_name}"
+            
+            # Verify joint properties using original joint name
+            orig_props = test_fixture.original_joints[orig_joint_name]
+            
+            # Check origin
+            origin = joint.find('origin')
+            assert origin is not None, f"Joint {joint_name} missing origin"
+            assert origin.get('xyz') == orig_props.origin['xyz'], \
+                f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
+            assert origin.get('rpy') == orig_props.origin['rpy'], \
+                f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
+
+class TestTopPlatform:
+    """Tests for TOP1 and indicator links."""
+    def test_top_platform_links(self, test_fixture: URDFTestFixture):
+        """Test if TOP1 and indicator links are correctly generated."""
+        for base_name in ["TOP1", "indicator1"]:
+            test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
+
+    def test_top_platform_connections(self, test_fixture: URDFTestFixture):
+        """Test if TOP1 and indicator are correctly connected."""
+        # Test connection from J6T1 to TOP1
+        j6t_top_config = (66, "J6T1", "TOP1")
+        joint_name = f"Rigid_{j6t_top_config[0]}{test_fixture.name_manager.stage}"
+        orig_joint_name = f"Rigid_{j6t_top_config[0]}"
+        parent_name = test_fixture.name_manager.get_component_name(j6t_top_config[1])
+        child_name = test_fixture.name_manager.get_component_name(j6t_top_config[2])
+        
+        # Find the joint in the XML
+        joint = None
+        for j in test_fixture.generated_root.findall(".//joint[@type='fixed']"):
+            if (j.get('name') == joint_name and
+                j.find('parent').get('link') == parent_name and
+                j.find('child').get('link') == child_name):
+                joint = j
+                break
+        
+        assert joint is not None, \
+            f"Should find rigid joint {joint_name} connecting {parent_name} to {child_name}"
+        
+        # Verify joint properties using original joint name
+        orig_props = test_fixture.original_joints[orig_joint_name]
+        
+        # Check origin
+        origin = joint.find('origin')
+        assert origin is not None, f"Joint {joint_name} missing origin"
+        assert origin.get('xyz') == orig_props.origin['xyz'], \
+            f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
+        assert origin.get('rpy') == orig_props.origin['rpy'], \
+            f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
+
+        # Test connection from TOP1 to indicator1
+        indicator_config = (77, "TOP1", "indicator1")
+        joint_name = f"Rigid_{indicator_config[0]}{test_fixture.name_manager.stage}"
+        orig_joint_name = f"Rigid_{indicator_config[0]}"
+        parent_name = test_fixture.name_manager.get_component_name(indicator_config[1])
+        child_name = test_fixture.name_manager.get_component_name(indicator_config[2])
+        
+        # Find the joint in the XML
+        joint = None
+        for j in test_fixture.generated_root.findall(".//joint[@type='fixed']"):
+            if (j.get('name') == joint_name and
+                j.find('parent').get('link') == parent_name and
+                j.find('child').get('link') == child_name):
+                joint = j
+                break
+        
+        assert joint is not None, \
+            f"Should find rigid joint {joint_name} connecting {parent_name} to {child_name}"
+        
+        # Verify joint properties using original joint name
+        orig_props = test_fixture.original_joints[orig_joint_name]
+        
+        # Check origin
+        origin = joint.find('origin')
+        assert origin is not None, f"Joint {joint_name} missing origin"
+        assert origin.get('xyz') == orig_props.origin['xyz'], \
+            f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
+        assert origin.get('rpy') == orig_props.origin['rpy'], \
+            f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
 
 class TestKinematicChain:
     """Tests for complete kinematic chain."""
@@ -488,6 +712,53 @@ class TestKinematicChain:
             ("X2top1", "UJ21")
         ]:
             kinematic_chain_fixture.verify_chain_connection(parent_base, child_base)
+
+    def test_complete_chain(self, kinematic_chain_fixture: KinematicChainFixture):
+        """Test the complete kinematic chain from base to indicator."""
+        # Test chain from base to indicator through first leg (X1)
+        chain_configs = [
+            ("base_link", "X1bottom1", "revolute"),
+            ("X1bottom1", "cylinder11", "revolute"),
+            ("cylinder11", "rod11", "prismatic"),
+            ("rod11", "piston11", "revolute"),
+            ("piston11", "X1top1", "revolute"),
+            ("X1top1", "UJ11", "revolute"),
+            ("UJ11", "J1B_1", "fixed"),
+            ("J6T1", "TOP1", "fixed"),  # J6T1 connects to TOP1 first
+            ("TOP1", "J1T1", "fixed"),  # Then TOP1 connects to J1T1
+            ("TOP1", "indicator1", "fixed")
+        ]
+        
+        for parent_base, child_base, joint_type in chain_configs:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
+
+        # Test chain through J6T1 to TOP1
+        j6_chain = [
+            ("base_link", "X6bottom1", "revolute"),
+            ("X6bottom1", "cylinder61", "revolute"),
+            ("cylinder61", "rod61", "prismatic"),
+            ("rod61", "piston61", "revolute"),
+            ("piston61", "X6top1", "revolute"),
+            ("X6top1", "UJ61", "revolute"),
+            ("UJ61", "J6B1", "fixed"),
+            ("J6B1", "J6T1", "fixed"),
+            ("J6T1", "TOP1", "fixed")
+        ]
+        
+        for parent_base, child_base, joint_type in j6_chain:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
+
+        # Test connections from TOP1 to all J*T links
+        jt_connections = [
+            ("TOP1", "J1T1"),
+            ("TOP1", "J2T1"),
+            ("TOP1", "J3T_1"),
+            ("TOP1", "J4T1"),
+            ("TOP1", "J5T_1")
+        ]
+        
+        for parent_base, child_base in jt_connections:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, "fixed")
 
 class TestPyBulletIntegration:
     """Tests for PyBullet integration."""
@@ -524,16 +795,29 @@ class TestPyBulletIntegration:
             robot_id = p.loadURDF(test_urdf_path, flags=p.URDF_USE_INERTIA_FROM_FILE)
             assert robot_id > -1, "URDF should load successfully"
         
-            # Get number of joints
+            # Count only movable joints (revolute and prismatic)
+            movable_joints = 0
             num_joints = p.getNumJoints(robot_id)
+            
+            for i in range(num_joints):
+                joint_info = p.getJointInfo(robot_id, i)
+                joint_type = joint_info[2]
+                if joint_type in [p.JOINT_REVOLUTE, p.JOINT_PRISMATIC]:
+                    movable_joints += 1
+            
             expected_joints = 36  # Based on Link_graph.txt: 30 revolute + 6 prismatic joints
-            assert num_joints == expected_joints, \
-                f"Should have {expected_joints} movable joints (30 revolute + 6 prismatic)"
+            assert movable_joints == expected_joints, \
+                f"Should have {expected_joints} movable joints (30 revolute + 6 prismatic), but found {movable_joints}"
         
             # Test joint properties
             for i in range(num_joints):
                 joint_info = p.getJointInfo(robot_id, i)
                 joint_name = joint_info[1].decode('utf-8')
+                joint_type = joint_info[2]
+                
+                # Skip fixed joints
+                if joint_type == p.JOINT_FIXED:
+                    continue
             
                 # Get corresponding joint properties
                 joint_props = test_fixture.generated_joints.get(joint_name)
@@ -543,7 +827,6 @@ class TestPyBulletIntegration:
                 orig_name = test_fixture.map_to_original_name(joint_name)
             
                 # Compare joint type
-                joint_type = joint_info[2]
                 if joint_props.joint_type == 'revolute':
                     assert joint_type == p.JOINT_REVOLUTE, \
                         f"Joint {joint_name} should be revolute"
