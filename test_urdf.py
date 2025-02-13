@@ -13,7 +13,7 @@ from dataclasses import dataclass
 class URDFTestData:
     """Container for URDF test data."""
     original: Dict[str, Dict]  # Original URDF properties
-    generated: Dict[str, Dict]  # Generated URDF properties
+    generated: Dict[str, Dict]  # Generated URDF properties and data
 
 class URDFTestFixture:
     """Base class for URDF test fixtures."""
@@ -133,13 +133,7 @@ class KinematicChainFixture(URDFTestFixture):
 
 @pytest.fixture(scope="module")
 def urdf_data() -> URDFTestData:
-    """Fixture providing properties from both original and generated URDF.
-    
-    Example:
-        >>> data = urdf_data()
-        >>> isinstance(data.original, dict)
-        True
-    """
+    """Fixture providing properties from both original and generated URDF."""
     # Extract properties from original URDF
     original_revolute_props = extract_joint_properties('Stewart.urdf', "Revolute_")
     original_slider_props = extract_joint_properties('Stewart.urdf', "Slider_")
@@ -171,74 +165,35 @@ def urdf_data() -> URDFTestData:
 
 @pytest.fixture(scope="module")
 def name_manager() -> NameManager:
-    """Fixture providing a NameManager instance for stage 1.
-    
-    Example:
-        >>> nm = name_manager()
-        >>> nm.stage
-        1
-    """
+    """Fixture providing a NameManager instance for stage 1."""
     return NameManager(stage=1)
 
 @pytest.fixture(scope="module")
 def test_fixture(urdf_data: URDFTestData, name_manager: NameManager) -> URDFTestFixture:
-    """Fixture providing the base test fixture.
-    
-    Example:
-        >>> tf = test_fixture(urdf_data, name_manager)
-        >>> isinstance(tf, URDFTestFixture)
-        True
-    """
+    """Fixture providing the base test fixture."""
     return URDFTestFixture(urdf_data, name_manager)
 
 @pytest.fixture(scope="module")
 def kinematic_chain_fixture(urdf_data: URDFTestData, name_manager: NameManager) -> KinematicChainFixture:
-    """Fixture providing the kinematic chain test fixture.
-    
-    Example:
-        >>> kf = kinematic_chain_fixture(urdf_data, name_manager)
-        >>> isinstance(kf, KinematicChainFixture)
-        True
-    """
+    """Fixture providing the kinematic chain test fixture."""
     return KinematicChainFixture(urdf_data, name_manager)
 
 class TestBasicProperties:
     """Tests for basic URDF properties."""
     def test_robot_name(self, urdf_data: URDFTestData):
-        """
-        Test if robot name structure is correct.
-
-        Example:
-            >>> generated_root = urdf_data.generated['root']
-            >>> generated_root.get('name')
-            'Stewart_1'
-        """
+        """Test if robot name structure is correct."""
         generated_root = urdf_data.generated['root']
         assert generated_root.get('name') == "Stewart_1", "Robot name should be 'Stewart_1' for stage 1"
 
     def test_material_properties(self, urdf_data: URDFTestData):
-        """
-        Test if material properties match.
-
-        Example:
-            >>> material = urdf_data.generated['root'].find('material')
-            >>> material.find('color').get('rgba')
-            '0.700 0.700 0.700 1.000'
-        """
+        """Test if material properties match."""
         generated_root = urdf_data.generated['root']
         material = generated_root.find('material')
         color = material.find('color').get('rgba')
         assert color == "0.700 0.700 0.700 1.000", "Material color should match"
 
     def test_stage_naming(self):
-        """
-        Test if stage-based naming is working correctly.
-
-        Example:
-            >>> stage2_urdf = generate_stewart_platform(stage=2, base_prefix="upper_")
-            >>> ET.fromstring(stage2_urdf).find(".//link[@name='upper_base_link2']") is not None
-            True
-        """
+        """Test if stage-based naming is working correctly."""
         stage2_urdf = generate_stewart_platform(stage=2, base_prefix="upper_")
         root = ET.fromstring(stage2_urdf)
         base_link = root.find(f".//link[@name='upper_base_link2']")
@@ -302,12 +257,7 @@ class TestBaseLink:
 class TestCylinderLinks:
     """Tests for cylinder links and their connections."""
     def test_cylinder_links(self, test_fixture: URDFTestFixture):
-        """
-        Test if cylinder links are correctly generated.
-
-        Example:
-            >>> test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name("cylinder61"))
-        """
+        """Test if cylinder links are correctly generated."""
         cylinder_configs = [
             ("cylinder61", "X6bottom1"),
             ("cylinder51", "X5bottom1"),
@@ -321,13 +271,7 @@ class TestCylinderLinks:
             test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
 
     def test_cylinder_joints(self, test_fixture: URDFTestFixture):
-        """
-        Test if cylinder joints are correctly connected.
-
-        Example:
-            >>> test_fixture.generated_joints[test_fixture.name_manager.get_joint_name(7)]
-            # Should have parent and child matching the expected cylinder joint configuration.
-        """
+        """Test if cylinder joints are correctly connected."""
         joint_configs = [
             (7, "X6bottom1", "cylinder61"),
             (8, "X5bottom1", "cylinder51"),
@@ -357,26 +301,13 @@ class TestCylinderLinks:
 class TestRodLinks:
     """Tests for rod links and their connections."""
     def test_rod_links(self, test_fixture: URDFTestFixture):
-        """
-        Test if rod links have correct properties.
-
-        Example:
-            >>> for rod in ["rod11", "rod21", "rod31", "rod41", "rod51", "rod61"]:
-            ...     test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(rod))
-        """
+        """Test if rod links have correct properties."""
         rod_names = ["rod11", "rod21", "rod31", "rod41", "rod51", "rod61"]
         for base_name in rod_names:
             test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
 
     def test_rod_joints(self, test_fixture: URDFTestFixture):
-        """
-        Test if rod joints are correctly connected.
-
-        Example:
-            >>> joint = test_fixture.generated_joints[test_fixture.name_manager.get_joint_name(13)]
-            >>> joint.parent, joint.child
-            ('cylinder11', 'rod11')
-        """
+        """Test if rod joints are correctly connected."""
         joint_configs = [
             (13, "cylinder11", "rod11"),
             (14, "cylinder21", "rod21"),
@@ -406,12 +337,7 @@ class TestRodLinks:
 class TestPistonLinks:
     """Tests for piston links and their connections."""
     def test_piston_links(self, test_fixture: URDFTestFixture):
-        """
-        Test if piston links are correctly generated.
-
-        Example:
-            >>> test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name("piston11"))
-        """
+        """Test if piston links are correctly generated."""
         piston_configs = [
             "piston11", "piston21", "piston31",
             "piston41", "piston51", "piston61"
@@ -420,14 +346,7 @@ class TestPistonLinks:
             test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
 
     def test_piston_joints(self, test_fixture: URDFTestFixture):
-        """
-        Test if piston joints are correctly connected.
-
-        Example:
-            >>> joint = test_fixture.generated_joints[test_fixture.name_manager.get_joint_name(19)]
-            >>> joint.parent, joint.child
-            ('rod11', 'piston11')
-        """
+        """Test if piston joints are correctly connected."""
         joint_configs = [
             (19, "rod11", "piston11"),
             (20, "rod21", "piston21"),
@@ -457,13 +376,7 @@ class TestPistonLinks:
 class TestTopLinks:
     """Tests for top links and their connections."""
     def test_top_links(self, test_fixture: URDFTestFixture):
-        """
-        Test if top links are correctly generated.
-
-        Example:
-            >>> for top in ["X1top1", "X2top1", "X3top1", "X4top1", "X5top1", "X6top1"]:
-            ...     test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(top))
-        """
+        """Test if top links are correctly generated."""
         top_configs = [
             "X1top1", "X2top1", "X3top1",
             "X4top1", "X5top1", "X6top1"
@@ -472,14 +385,7 @@ class TestTopLinks:
             test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
 
     def test_top_joints(self, test_fixture: URDFTestFixture):
-        """
-        Test if top joints are correctly connected.
-
-        Example:
-            >>> joint = test_fixture.generated_joints[test_fixture.name_manager.get_joint_name(26)]
-            >>> joint.parent, joint.child
-            ('piston11', 'X1top1')
-        """
+        """Test if top joints are correctly connected."""
         joint_configs = [
             (26, "piston11", "X1top1"),
             (35, "piston21", "X2top1"),
