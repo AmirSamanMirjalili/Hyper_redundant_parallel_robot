@@ -114,14 +114,29 @@ class URDFTestFixture:
 class KinematicChainFixture(URDFTestFixture):
     """Fixture for testing kinematic chain properties."""
     def verify_chain_connection(self, parent_base: str, child_base: str, joint_type: str = 'revolute'):
-        """Verify connection between two links in the kinematic chain."""
+        """Verify connection between two links in the kinematic chain.
+        
+        Args:
+            parent_base: Base name of the parent link
+            child_base: Base name of the child link
+            joint_type: Type of joint ('revolute', 'prismatic', 'fixed', 'continuous')
+        """
         parent_name = self.name_manager.get_component_name(parent_base)
         child_name = self.name_manager.get_component_name(child_base)
         
         # Find the joint connecting these links
         joint = None
-        # Search for both revolute and continuous joints
-        for joint_type_to_check in [joint_type, 'continuous']:
+        joint_types_to_check = []
+        
+        if joint_type == 'fixed':
+            # For fixed joints, just look for fixed type
+            joint_types_to_check = ['fixed']
+        else:
+            # For movable joints, check both specified type and continuous
+            joint_types_to_check = [joint_type, 'continuous']
+        
+        # Search for joints of allowed types
+        for joint_type_to_check in joint_types_to_check:
             for j in self.generated_root.findall(f".//joint[@type='{joint_type_to_check}']"):
                 if (j.find('parent').get('link') == parent_name and 
                     j.find('child').get('link') == child_name):
@@ -131,13 +146,13 @@ class KinematicChainFixture(URDFTestFixture):
                 break
         
         assert joint is not None, \
-            f"Should find a {joint_type} or continuous joint connecting {parent_name} to {child_name}"
+            f"Should find a {' or '.join(joint_types_to_check)} joint connecting {parent_name} to {child_name}"
         
         # Verify the joint has all required elements
         assert joint.find('origin') is not None, \
             f"Joint connecting {parent_name} to {child_name} should have origin"
         
-        # Only check for axis and limits on movable joints (not fixed)
+        # Only check for axis and limits on movable joints
         if joint_type not in ['fixed']:
             assert joint.find('axis') is not None, \
                 f"Joint connecting {parent_name} to {child_name} should have axis"
@@ -146,6 +161,122 @@ class KinematicChainFixture(URDFTestFixture):
             if joint.get('type') != 'continuous':
                 assert joint.find('limit') is not None, \
                     f"Joint connecting {parent_name} to {child_name} should have limits"
+
+@dataclass
+class ChainConfigs:
+    """Configuration data for kinematic chain tests."""
+    # First leg chain (through X1)
+    first_leg_chain = [
+        ("base_link", "X1bottom1", "revolute"),
+        ("X1bottom1", "cylinder11", "revolute"),
+        ("cylinder11", "rod11", "prismatic"),
+        ("rod11", "piston11", "revolute"),
+        ("piston11", "X1top1", "revolute"),
+        ("X1top1", "UJ11", "revolute"),
+        ("UJ11", "J1B_1", "fixed"),
+        ("J6T1", "TOP1", "fixed"),  # J6T1 connects to TOP1 first
+        ("TOP1", "J1T1", "fixed"),  # Then TOP1 connects to J1T1
+        ("TOP1", "indicator1", "fixed")
+    ]
+    
+    # J6 chain (through X6)
+    j6_chain = [
+        ("base_link", "X6bottom1", "revolute"),
+        ("X6bottom1", "cylinder61", "revolute"),
+        ("cylinder61", "rod61", "prismatic"),
+        ("rod61", "piston61", "revolute"),
+        ("piston61", "X6top1", "revolute"),
+        ("X6top1", "UJ61", "revolute"),
+        ("UJ61", "J6B1", "fixed"),
+        ("J6B1", "J6T1", "fixed"),
+        ("J6T1", "TOP1", "fixed")
+    ]
+    
+    # Universal joint connections
+    universal_joint_connections = [
+        ("X1top1", "UJ11"),
+        ("X6top1", "UJ61"),
+        ("X5top1", "UJ51"),
+        ("X4top1", "UJ41"),
+        ("X3top1", "UJ31"),
+        ("X2top1", "UJ21")
+    ]
+    
+    # J*T connections to TOP1
+    jt_connections = [
+        ("TOP1", "J1T1"),
+        ("TOP1", "J2T1"),
+        ("TOP1", "J3T_1"),  # Note: J3T_1 has underscore
+        ("TOP1", "J4T1"),
+        ("TOP1", "J5T_1")   # Note: J5T_1 has underscore
+    ]
+
+    # Rigid joint configurations
+    rigid_joint_configs = [
+        # (joint_num, parent, child)
+        (59, "UJ11", "J1B_1"),
+        (60, "UJ21", "J2B1"),
+        (61, "UJ31", "J3B1"),
+        (62, "UJ41", "J4B1"),
+        (63, "UJ51", "J5B1"),
+        (64, "UJ61", "J6B1"),
+        (65, "J6B1", "J6T1"),
+        (66, "J6T1", "TOP1"),
+        (67, "TOP1", "J1T1"),
+        (68, "TOP1", "J2T1"),
+        (69, "TOP1", "J3T_1"),
+        (70, "TOP1", "J4T1"),
+        (71, "TOP1", "J5T_1"),
+        (77, "TOP1", "indicator1")
+    ]
+
+    @staticmethod
+    def get_rigid_joint_name(joint_num: int, stage: int) -> str:
+        """Get the name of a rigid joint with stage suffix."""
+        return f"Rigid_{joint_num}{stage}"
+
+    @staticmethod
+    def get_original_rigid_joint_name(joint_num: int) -> str:
+        """Get the original name of a rigid joint without stage suffix."""
+        return f"Rigid_{joint_num}"
+
+class TestKinematicChain:
+    """Tests for complete kinematic chain."""
+    def test_no_floating_links(self, test_fixture: URDFTestFixture):
+        """Test that all links (except base) are connected by joints."""
+        # Get all connected links
+        connected_links = set()
+        for joint in test_fixture.generated_joints.values():
+            connected_links.add(joint.parent)
+            connected_links.add(joint.child)
+        
+        # Base link should be the only unconnected link
+        all_links = set(test_fixture.generated_links.keys())
+        unconnected = all_links - connected_links
+        assert len(unconnected) <= 1, "Only base_link should be unconnected"
+        if unconnected:
+            assert list(unconnected)[0] == 'base_link1', \
+                "The only unconnected link should be base_link1"
+
+    def test_universal_joint_chain(self, kinematic_chain_fixture: KinematicChainFixture):
+        """Test the kinematic chain from top links through universal joints."""
+        # Test connections from top links to universal joints
+        for parent_base, child_base in ChainConfigs.universal_joint_connections:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base)
+
+    def test_complete_chain(self, kinematic_chain_fixture: KinematicChainFixture):
+        """Test the complete kinematic chain from base to indicator."""
+        # Test chain from base to indicator through first leg (X1)
+        for parent_base, child_base, joint_type in ChainConfigs.first_leg_chain:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
+
+        # Test chain through J6T1 to TOP1
+        for parent_base, child_base, joint_type in ChainConfigs.j6_chain:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
+
+        # Test connections from TOP1 to all J*T links
+        for parent_base, child_base in ChainConfigs.jt_connections:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, "fixed")
 
 @pytest.fixture(scope="module")
 def urdf_data() -> URDFTestData:
@@ -681,84 +812,6 @@ class TestTopPlatform:
             f"Joint {joint_name} origin xyz mismatch: {origin.get('xyz')} != {orig_props.origin['xyz']}"
         assert origin.get('rpy') == orig_props.origin['rpy'], \
             f"Joint {joint_name} origin rpy mismatch: {origin.get('rpy')} != {orig_props.origin['rpy']}"
-
-class TestKinematicChain:
-    """Tests for complete kinematic chain."""
-    def test_no_floating_links(self, test_fixture: URDFTestFixture):
-        """Test that all links (except base) are connected by joints."""
-        # Get all connected links
-        connected_links = set()
-        for joint in test_fixture.generated_joints.values():
-            connected_links.add(joint.parent)
-            connected_links.add(joint.child)
-        
-        # Base link should be the only unconnected link
-        all_links = set(test_fixture.generated_links.keys())
-        unconnected = all_links - connected_links
-        assert len(unconnected) <= 1, "Only base_link should be unconnected"
-        if unconnected:
-            assert list(unconnected)[0] == 'base_link1', \
-                "The only unconnected link should be base_link1"
-
-    def test_universal_joint_chain(self, kinematic_chain_fixture: KinematicChainFixture):
-        """Test the kinematic chain from top links through universal joints."""
-        # Test connections from top links to universal joints
-        for parent_base, child_base in [
-            ("X1top1", "UJ11"),
-            ("X6top1", "UJ61"),
-            ("X5top1", "UJ51"),
-            ("X4top1", "UJ41"),
-            ("X3top1", "UJ31"),
-            ("X2top1", "UJ21")
-        ]:
-            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base)
-
-    def test_complete_chain(self, kinematic_chain_fixture: KinematicChainFixture):
-        """Test the complete kinematic chain from base to indicator."""
-        # Test chain from base to indicator through first leg (X1)
-        chain_configs = [
-            ("base_link", "X1bottom1", "revolute"),
-            ("X1bottom1", "cylinder11", "revolute"),
-            ("cylinder11", "rod11", "prismatic"),
-            ("rod11", "piston11", "revolute"),
-            ("piston11", "X1top1", "revolute"),
-            ("X1top1", "UJ11", "revolute"),
-            ("UJ11", "J1B_1", "fixed"),
-            ("J6T1", "TOP1", "fixed"),  # J6T1 connects to TOP1 first
-            ("TOP1", "J1T1", "fixed"),  # Then TOP1 connects to J1T1
-            ("TOP1", "indicator1", "fixed")
-        ]
-        
-        for parent_base, child_base, joint_type in chain_configs:
-            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
-
-        # Test chain through J6T1 to TOP1
-        j6_chain = [
-            ("base_link", "X6bottom1", "revolute"),
-            ("X6bottom1", "cylinder61", "revolute"),
-            ("cylinder61", "rod61", "prismatic"),
-            ("rod61", "piston61", "revolute"),
-            ("piston61", "X6top1", "revolute"),
-            ("X6top1", "UJ61", "revolute"),
-            ("UJ61", "J6B1", "fixed"),
-            ("J6B1", "J6T1", "fixed"),
-            ("J6T1", "TOP1", "fixed")
-        ]
-        
-        for parent_base, child_base, joint_type in j6_chain:
-            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, joint_type)
-
-        # Test connections from TOP1 to all J*T links
-        jt_connections = [
-            ("TOP1", "J1T1"),
-            ("TOP1", "J2T1"),
-            ("TOP1", "J3T_1"),
-            ("TOP1", "J4T1"),
-            ("TOP1", "J5T_1")
-        ]
-        
-        for parent_base, child_base in jt_connections:
-            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base, "fixed")
 
 class TestPyBulletIntegration:
     """Tests for PyBullet integration."""
