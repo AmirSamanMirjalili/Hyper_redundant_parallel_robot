@@ -25,8 +25,11 @@ def main():
 
     # Load ground plane and URDF
     planeId = p.loadURDF("plane.urdf")
-    robot_id = p.loadURDF(urdf_path, [0, 0, 0.1], [0, 0, 0, 1],
-                         flags=p.URDF_USE_INERTIA_FROM_FILE)
+    robot_id = p.loadURDF(urdf_path, 
+                         basePosition=[0, 0, 0.1],  # Slightly above ground
+                         baseOrientation=[0, 0, 0, 1],  # No rotation
+                         flags=p.URDF_USE_INERTIA_FROM_FILE,
+                         useFixedBase=1)  # Fix base to ground
 
     # Run simulation
     try:
