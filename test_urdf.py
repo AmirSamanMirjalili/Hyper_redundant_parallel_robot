@@ -115,8 +115,8 @@ class KinematicChainFixture(URDFTestFixture):
     """Fixture for testing kinematic chain properties."""
     def verify_chain_connection(self, parent_base: str, child_base: str, joint_type: str = 'revolute'):
         """Verify connection between two links in the kinematic chain.
-        
-        Args:
+    
+    Args:
             parent_base: Base name of the parent link
             child_base: Base name of the child link
             joint_type: Type of joint ('revolute', 'prismatic', 'fixed', 'continuous')

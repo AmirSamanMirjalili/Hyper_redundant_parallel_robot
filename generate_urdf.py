@@ -758,7 +758,7 @@ class StewartPlatformURDF:
             joint_type="fixed",
             parent=self.name_manager.get_component_name("J6B1"),
             child=self.name_manager.get_component_name("J6T1"),
-            origin=Origin(
+                        origin=Origin(
                 xyz=tuple(map(float, self.original_joint_props["Rigid_65"].origin['xyz'].split())),
                 rpy=tuple(map(float, self.original_joint_props["Rigid_65"].origin['rpy'].split()))
             ),
