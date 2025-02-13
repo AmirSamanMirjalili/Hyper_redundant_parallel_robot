@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 import xml.etree.ElementTree as ET
-from extract_urdf_properties import extract_joint_properties, extract_link_properties
+from extract_urdf_properties import extract_joint_properties, extract_link_properties, JointProperties, LinkProperties
 import re
 
 @dataclass
@@ -291,6 +291,189 @@ class NameManager:
         """
         return f"meshes/{base_name}.stl"
 
+@dataclass
+class LinkFactory:
+    """Factory class for creating links with consistent properties."""
+    name_manager: NameManager
+    original_props: Dict[str, LinkProperties]
+    base_z: float = 0
+
+    def create_link(self, base_name: str, link_name: str = None) -> Link:
+        """Create a link with properties from original URDF.
+        
+        Args:
+            base_name: Original name from mesh files (e.g., "X1bottom1")
+            link_name: Optional override for the generated link name
+        """
+        if link_name is None:
+            link_name = self.name_manager.get_component_name(base_name)
+            
+        orig_props = self.original_props[base_name]
+        inertial_props = orig_props.inertial
+        
+        # Create inertial origin
+        link_origin = Origin(
+            xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
+            rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
+        )
+        
+        if self.base_z:
+            link_origin = self._apply_z_offset(link_origin)
+        
+        return Link(
+            name=link_name,
+            inertial=self._create_inertial(inertial_props, link_origin),
+            visual=self._create_visual(orig_props.visual, base_name),
+            collision=self._create_collision(orig_props.collision, base_name)
+        )
+    
+    def _create_inertial(self, props: Dict, origin: Origin) -> Inertial:
+        """Create inertial properties from original data."""
+        return Inertial(
+            origin=origin,
+            mass=float(props['mass']),
+            ixx=float(props['ixx']),
+            iyy=float(props['iyy']),
+            izz=float(props['izz']),
+            ixy=float(props['ixy']),
+            iyz=float(props['iyz']),
+            ixz=float(props['ixz'])
+        )
+    
+    def _create_visual(self, props: Dict, base_name: str) -> Visual:
+        """Create visual properties from original data."""
+        origin = Origin(
+            xyz=tuple(map(float, props['origin']['xyz'].split())),
+            rpy=tuple(map(float, props['origin']['rpy'].split())) if 'rpy' in props['origin'] else (0, 0, 0)
+        )
+        if self.base_z:
+            origin = self._apply_z_offset(origin)
+        return Visual(
+            origin=origin,
+            geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
+        )
+    
+    def _create_collision(self, props: Dict, base_name: str) -> Collision:
+        """Create collision properties from original data."""
+        origin = Origin(
+            xyz=tuple(map(float, props['origin']['xyz'].split())),
+            rpy=tuple(map(float, props['origin']['rpy'].split())) if 'rpy' in props['origin'] else (0, 0, 0)
+        )
+        if self.base_z:
+            origin = self._apply_z_offset(origin)
+        return Collision(
+            origin=origin,
+            geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
+        )
+
+    def _apply_z_offset(self, origin: Origin) -> Origin:
+        """Apply the base_z offset to an origin."""
+        return Origin(
+            (origin.xyz[0], origin.xyz[1], origin.xyz[2] + self.base_z),
+            origin.rpy
+        )
+
+@dataclass
+class JointFactory:
+    """Factory class for creating joints with consistent properties."""
+    name_manager: NameManager
+    original_props: Dict[str, JointProperties]
+    
+    def create_joint(self, joint_num: int, parent: str, child: str) -> Joint:
+        """Create a joint with properties from original URDF.
+        
+        Args:
+            joint_num: Joint number from Link_graph.txt
+            parent: Parent link name
+            child: Child link name
+        """
+        joint_name = self.name_manager.get_joint_name(joint_num)
+        base_name = self.name_manager.strip_stage_suffix(joint_name)
+            
+        # Get original properties
+        if base_name.startswith('Slider_'):
+            orig_props = self.original_props[base_name]
+        else:
+            orig_props = self.original_props[f"Revolute_{joint_num}"]
+        
+        # Create origin
+        joint_origin = Origin(
+            xyz=tuple(map(float, orig_props.origin['xyz'].split())),
+            rpy=tuple(map(float, orig_props.origin['rpy'].split())) if 'rpy' in orig_props.origin else (0, 0, 0)
+        )
+        
+        return Joint(
+            name=joint_name,
+            joint_type=orig_props.joint_type,
+            parent=parent,
+            child=child,
+            origin=joint_origin,
+            axis=tuple(map(float, orig_props.axis.split())),
+            limits=orig_props.limits,
+            transmission=Transmission(
+                self.name_manager.get_transmission_name(joint_name),
+                joint_name
+            )
+        )
+
+@dataclass
+class StewartPlatformConfig:
+    """Configuration data for Stewart platform components."""
+    # Bottom link configurations based on Link_graph.txt and mesh files
+    bottom_configs = [
+        # (name, joint_num)  # Joint numbers from Link_graph.txt
+        ("X1bottom1", 1),  # Use exact name from X1bottom1.stl
+        ("X6bottom1", 2),  # Use exact name from X6bottom1.stl
+        ("X5bottom1", 3),  # Use exact name from X5bottom1.stl
+        ("X2bottom1", 4),  # Use exact name from X2bottom1.stl
+        ("X4bottom1", 5),  # Use exact name from X4bottom1.stl
+        ("X3bottom1", 6)   # Use exact name from X3bottom1.stl
+    ]
+
+    # Cylinder configurations based on Link_graph.txt and mesh files
+    cylinder_configs = [
+        # (cylinder_name, parent_bottom_link, joint_num)
+        ("cylinder61", "X6bottom1", 7),  # Use exact name from cylinder61.stl
+        ("cylinder51", "X5bottom1", 8),  # Use exact name from cylinder51.stl
+        ("cylinder11", "X1bottom1", 9),  # Use exact name from cylinder11.stl
+        ("cylinder21", "X2bottom1", 10), # Use exact name from cylinder21.stl
+        ("cylinder31", "X3bottom1", 11), # Use exact name from cylinder31.stl
+        ("cylinder41", "X4bottom1", 12)  # Use exact name from cylinder41.stl
+    ]
+
+    # Rod configurations based on Link_graph.txt and mesh files
+    rod_configs = [
+        # (rod_name, parent_cylinder, joint_num)
+        ("rod11", "cylinder11", 13),  # Use exact name from rod11.stl
+        ("rod21", "cylinder21", 14),  # Use exact name from rod21.stl
+        ("rod31", "cylinder31", 15),  # Use exact name from rod31.stl
+        ("rod41", "cylinder41", 16),  # Use exact name from rod41.stl
+        ("rod51", "cylinder51", 17),  # Use exact name from rod51.stl
+        ("rod61", "cylinder61", 18)   # Use exact name from rod61.stl
+    ]
+
+    # Piston configurations based on Link_graph.txt and mesh files
+    piston_configs = [
+        # (piston_name, parent_rod, joint_num)
+        ("piston11", "rod11", 19),  # Use exact name from piston11.stl
+        ("piston21", "rod21", 20),  # Use exact name from piston21.stl
+        ("piston31", "rod31", 21),  # Use exact name from piston31.stl
+        ("piston61", "rod61", 22),  # Use exact name from piston61.stl
+        ("piston51", "rod51", 23),  # Use exact name from piston51.stl
+        ("piston41", "rod41", 24)   # Use exact name from piston41.stl
+    ]
+
+    # Top link configurations based on Link_graph.txt and mesh files
+    top_configs = [
+        # (top_name, parent_piston, joint_num)
+        ("X1top1", "piston11", 26),  # Use exact name from X1top1.stl
+        ("X2top1", "piston21", 35),  # Use exact name from X2top1.stl
+        ("X3top1", "piston31", 33),  # Use exact name from X3top1.stl
+        ("X4top1", "piston41", 27),  # Use exact name from X4top1.stl
+        ("X5top1", "piston51", 28),  # Use exact name from X5top1.stl
+        ("X6top1", "piston61", 25)   # Use exact name from X6top1.stl
+    ]
+
 class StewartPlatformURDF:
     def __init__(self, stage: int = 1, base_prefix: str = "", base_z: float = 0):
         """
@@ -306,503 +489,108 @@ class StewartPlatformURDF:
         self.name_manager = NameManager(stage, base_prefix)
         
         # Load properties from original URDF
-        self.original_joint_props = extract_joint_properties("Stewart.urdf")  # Remove Revolute_ prefix to load all joints
+        self.original_joint_props = extract_joint_properties("Stewart.urdf")
         self.original_link_props = extract_link_properties("Stewart.urdf")
         
+        # Create factories
+        self.link_factory = LinkFactory(self.name_manager, self.original_link_props, self.base_z)
+        self.joint_factory = JointFactory(self.name_manager, self.original_joint_props)
+        
+        # Initialize component lists
         self.links: List[Link] = []
         self.joints: List[Joint] = []
         
+        # Initialize components
+        self._init_components()
+    
+    def _init_components(self):
+        """Initialize all components in the correct order."""
         self._init_base_link()
         self._init_bottom_links()
         self._init_cylinder_links()
         self._init_rod_links()
         self._init_piston_links()
-
-    def _apply_z_offset(self, origin: Origin) -> Origin:
-        """Apply the base_z offset to an origin."""
-        return Origin(
-            (origin.xyz[0], origin.xyz[1], origin.xyz[2] + self.base_z),
-            origin.rpy
-        )
-
-    def _get_original_joint_props(self, joint_name: str) -> Optional[Dict]:
-        """Get properties of a joint from the original URDF."""
-        try:
-            # Extract the joint number and create the original name
-            base_name = self.name_manager.strip_stage_suffix(joint_name)
-            
-            # Handle both Revolute_ and Slider_ prefixes
-            if base_name.startswith('Slider_'):
-                # For explicit Slider_ lookups, use as is
-                original_name = base_name
-                joint_num = int(base_name.split('_')[1])
-            elif base_name.startswith('Revolute_'):
-                # For Revolute_ joints, check if it's actually a slider joint (13-18)
-                joint_num = int(base_name.split('_')[1])
-                if 13 <= joint_num <= 18:
-                    original_name = f"Slider_{joint_num}"
-                else:
-                    original_name = base_name
-            else:
-                return None
-
-            print(f"[Joint Lookup] {joint_name} -> {original_name}")
-            
-            # Get the original properties
-            if original_name in self.original_joint_props:
-                props = self.original_joint_props[original_name]
-                print(f"[Joint Props] Found properties for {original_name}: type={props.joint_type}")
-                
-                # Update parent/child links to use stage-appropriate names
-                if props.parent == "base_link":
-                    props.parent = self.name_manager.get_base_link_name()
-                else:
-                    props.parent = self.name_manager.get_component_name(props.parent)
-                    
-                if "bottom" in props.child:
-                    props.child = self.name_manager.get_component_name(props.child.rsplit('1', 1)[0])
-                else:
-                    props.child = self.name_manager.get_component_name(props.child)
-                
-                return props
-            
-            print(f"[Joint Props] No properties found for {original_name}")
-            return None
-        except (ValueError, IndexError) as e:
-            print(f"[Joint Error] Failed to process joint name {joint_name}: {str(e)}")
-            return None
-
-    def _get_original_link_props(self, link_name: str) -> Optional[Dict]:
-        """Get properties of a link from the original URDF."""
-        # Get original name
-        if "base_link" in link_name:
-            base_name = "base_link"
-        elif "bottom" in link_name:
-            base_name = self.name_manager.get_original_bottom_link_name(link_name)
-        elif "rod" in link_name or "cylinder" in link_name:
-            # For rod and cylinder links, strip stage suffix to get original name
-            base_name = self.name_manager.strip_stage_suffix(link_name)
-        else:
-            base_name = link_name
-        
-        if base_name in self.original_link_props:
-            return self.original_link_props[base_name]
-        
-        print(f"Warning: No properties found for link {base_name} (original name for {link_name})")
-        return None
-
+        self._init_top_links()
+    
     def _init_base_link(self):
-        """Initialize the base link of the Stewart platform."""
-        base_link_name = self.name_manager.get_base_link_name()
-        original_props = self._get_original_link_props("base_link")
-        
-        if original_props:
-            inertial_props = original_props.inertial
-            base_origin = Origin(
-                xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
-                rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
-            )
-            if self.base_z:
-                base_origin = self._apply_z_offset(base_origin)
-
-            base_link = Link(
-                name=base_link_name,
-                inertial=Inertial(
-                    origin=base_origin,
-                    mass=float(inertial_props['mass']),
-                    ixx=float(inertial_props['ixx']),
-                    iyy=float(inertial_props['iyy']),
-                    izz=float(inertial_props['izz']),
-                    ixy=float(inertial_props['ixy']),
-                    iyz=float(inertial_props['iyz']),
-                    ixz=float(inertial_props['ixz'])
-                ),
-                visual=Visual(
-                    origin=self._apply_z_offset(Origin((0, 0, 0))),
-                    geometry=Geometry(self.name_manager.get_mesh_filename("base_link"))
-                ),
-                collision=Collision(
-                    origin=self._apply_z_offset(Origin((0, 0, 0))),
-                    geometry=Geometry(self.name_manager.get_mesh_filename("base_link"))
-                )
-            )
-            self.links.append(base_link)
-
+        """Initialize the base link."""
+        base_link = self.link_factory.create_link("base_link", self.name_manager.get_base_link_name())
+        self.links.append(base_link)
+    
     def _init_bottom_links(self):
-        """Initialize the bottom links and their joints."""
-        # Bottom link configurations based on Link_graph.txt and mesh files
-        bottom_configs = [
-            # (name, joint_num)  # Joint numbers from Link_graph.txt
-            ("X1bottom1", 1),  # Use exact name from X1bottom1.stl
-            ("X6bottom1", 2),  # Use exact name from X6bottom1.stl
-            ("X5bottom1", 3),  # Use exact name from X5bottom1.stl
-            ("X2bottom1", 4),  # Use exact name from X2bottom1.stl
-            ("X4bottom1", 5),  # Use exact name from X4bottom1.stl
-            ("X3bottom1", 6)   # Use exact name from X3bottom1.stl
-        ]
-
-        for base_name, joint_num in bottom_configs:
-            # Generate names for this stage
-            link_name = self.name_manager.get_component_name(base_name)
-            joint_name = self.name_manager.get_joint_name(joint_num)
-            
-            # Get original properties
-            original_link_props = self._get_original_link_props(link_name)
-            original_joint_props = self._get_original_joint_props(joint_name)
-            
-            if original_link_props and original_joint_props:
-                # Create link
-                inertial_props = original_link_props.inertial
-                link_origin = Origin(
-                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
-                )
-                
-                # Create the link
-                bottom_link = Link(
-                    name=link_name,
-                    inertial=Inertial(
-                        origin=link_origin,
-                        mass=float(inertial_props['mass']),
-                        ixx=float(inertial_props['ixx']),
-                        iyy=float(inertial_props['iyy']),
-                        izz=float(inertial_props['izz']),
-                        ixy=float(inertial_props['ixy']),
-                        iyz=float(inertial_props['iyz']),
-                        ixz=float(inertial_props['ixz'])
-                    ),
-                    visual=Visual(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    ),
-                    collision=Collision(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    )
-                )
-                self.links.append(bottom_link)
-
-                # Create joint with explicit parent and child links
-                joint_origin = Origin(
-                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
-                )
-                
-                # Set parent and child links explicitly
-                parent_link = self.name_manager.get_base_link_name()  # All bottom links connect to base_link
-                child_link = link_name  # The bottom link we just created
-                
-                joint = Joint(
-                    name=joint_name,
-                    joint_type=original_joint_props.joint_type,  # Use attribute access
-                    parent=parent_link,
-                    child=child_link,
-                    origin=joint_origin,
-                    axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,  # Use attribute access
-                    transmission=Transmission(
-                        self.name_manager.get_transmission_name(joint_name),
-                        joint_name
-                    )
-                )
-                self.joints.append(joint)
-
-    def _init_cylinder_links(self):
-        """Initialize the cylinder links and their revolute joints with bottom links."""
-        print("\n[Cylinder Links] Starting cylinder link initialization")
-        
-        # Cylinder configurations based on Link_graph.txt and mesh files
-        cylinder_configs = [
-            # (cylinder_name, parent_bottom_link, joint_num)
-            ("cylinder61", "X6bottom1", 7),  # Use exact name from cylinder61.stl
-            ("cylinder51", "X5bottom1", 8),  # Use exact name from cylinder51.stl
-            ("cylinder11", "X1bottom1", 9),  # Use exact name from cylinder11.stl
-            ("cylinder21", "X2bottom1", 10), # Use exact name from cylinder21.stl
-            ("cylinder31", "X3bottom1", 11), # Use exact name from cylinder31.stl
-            ("cylinder41", "X4bottom1", 12)  # Use exact name from cylinder41.stl
-        ]
-
-        for base_name, parent_base, joint_num in cylinder_configs:
-            # Generate names for this stage using NameManager
-            link_name = self.name_manager.get_component_name(base_name)
-            joint_name = self.name_manager.get_joint_name(joint_num)
-            parent_name = self.name_manager.get_component_name(parent_base)
-            
-            print(f"\n[Cylinder Link] Processing cylinder {base_name}:")
-            print(f"  Generated names:")
-            print(f"    Link: {link_name}")
-            print(f"    Joint: {joint_name}")
-            print(f"    Parent: {parent_name}")
-            
-            # Get original properties
-            original_link_props = self._get_original_link_props(link_name)
-            original_joint_props = self._get_original_joint_props(joint_name)
-            
-            print(f"  Original properties:")
-            print(f"    Link props found: {original_link_props is not None}")
-            print(f"    Joint props found: {original_joint_props is not None}")
-            
-            if original_link_props and original_joint_props:
-                # Create cylinder link
-                inertial_props = original_link_props.inertial
-                link_origin = Origin(
-                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
-                )
-                
-                cylinder_link = Link(
-                    name=link_name,
-                    inertial=Inertial(
-                        origin=link_origin,
-                        mass=float(inertial_props['mass']),
-                        ixx=float(inertial_props['ixx']),
-                        iyy=float(inertial_props['iyy']),
-                        izz=float(inertial_props['izz']),
-                        ixy=float(inertial_props['ixy']),
-                        iyz=float(inertial_props['iyz']),
-                        ixz=float(inertial_props['ixz'])
-                    ),
-                    visual=Visual(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    ),
-                    collision=Collision(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    )
-                )
-                self.links.append(cylinder_link)
-                print(f"  Added cylinder link: {link_name}")
-
-                # Create revolute joint connecting bottom link to cylinder
-                joint_origin = Origin(
-                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
-                )
-                
-                joint = Joint(
-                    name=joint_name,
-                    joint_type=original_joint_props.joint_type,  # Use attribute access
-                    parent=parent_name,
-                    child=link_name,
-                    origin=joint_origin,
-                    axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,  # Use attribute access
-                    transmission=Transmission(
-                        self.name_manager.get_transmission_name(joint_name),
-                        joint_name
-                    )
-                )
-                self.joints.append(joint)
-                print(f"  Added joint: {joint_name} ({joint.joint_type})")
-                print(f"    Parent: {joint.parent}")
-                print(f"    Child: {joint.child}")
-                print(f"    Axis: {joint.axis}")
-                if joint.limits:
-                    print(f"    Limits: {joint.limits}")
-            else:
-                print(f"  ERROR: Missing properties for cylinder {base_name}")
-                if not original_link_props:
-                    print(f"    Missing link properties")
-                if not original_joint_props:
-                    print(f"    Missing joint properties")
-
-    def _init_rod_links(self):
-        """Initialize the rod links and their slider joints with cylinders."""
-        # Rod configurations based on Link_graph.txt and mesh files
-        rod_configs = [
-            # (rod_name, parent_cylinder, joint_num)
-            ("rod11", "cylinder11", 13),  # Use exact name from rod11.stl
-            ("rod21", "cylinder21", 14),  # Use exact name from rod21.stl
-            ("rod31", "cylinder31", 15),  # Use exact name from rod31.stl
-            ("rod41", "cylinder41", 16),  # Use exact name from rod41.stl
-            ("rod51", "cylinder51", 17),  # Use exact name from rod51.stl
-            ("rod61", "cylinder61", 18)   # Use exact name from rod61.stl
-        ]
-
-        for base_name, parent_base, joint_num in rod_configs:
-            # Generate names for this stage using NameManager
-            link_name = self.name_manager.get_component_name(base_name)
-            joint_name = self.name_manager.get_joint_name(joint_num)  # Will return Slider_XX for these joints
-            parent_name = self.name_manager.get_component_name(parent_base)
-            
-            print(f"\n[Rod Joint] Processing joint {joint_num}:")
-            print(f"[Rod Joint] Generated names: joint={joint_name}, link={link_name}, parent={parent_name}")
-            
-            # Get original properties
-            original_link_props = self._get_original_link_props(link_name)
-            original_joint_props = self._get_original_joint_props(joint_name)  # Will handle Slider_ prefix internally
-            
-            if original_link_props and original_joint_props:
-                # Create rod link
-                inertial_props = original_link_props.inertial
-                link_origin = Origin(
-                    xyz=tuple(map(float, inertial_props['origin']['xyz'].split())),
-                    rpy=tuple(map(float, inertial_props['origin']['rpy'].split())) if 'rpy' in inertial_props['origin'] else (0, 0, 0)
-                )
-                
-                rod_link = Link(
-                    name=link_name,
-                    inertial=Inertial(
-                        origin=link_origin,
-                        mass=float(inertial_props['mass']),
-                        ixx=float(inertial_props['ixx']),
-                        iyy=float(inertial_props['iyy']),
-                        izz=float(inertial_props['izz']),
-                        ixy=float(inertial_props['ixy']),
-                        iyz=float(inertial_props['iyz']),
-                        ixz=float(inertial_props['ixz'])
-                    ),
-                    visual=Visual(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.visual['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.visual['origin']['rpy'].split())) if 'rpy' in original_link_props.visual['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    ),
-                    collision=Collision(
-                        origin=Origin(
-                            xyz=tuple(map(float, original_link_props.collision['origin']['xyz'].split())),
-                            rpy=tuple(map(float, original_link_props.collision['origin']['rpy'].split())) if 'rpy' in original_link_props.collision['origin'] else (0, 0, 0)
-                        ),
-                        geometry=Geometry(self.name_manager.get_mesh_filename(base_name))
-                    )
-                )
-                self.links.append(rod_link)
-
-                # Create slider joint connecting cylinder to rod
-                joint_origin = Origin(
-                    xyz=tuple(map(float, original_joint_props.origin['xyz'].split())),
-                    rpy=tuple(map(float, original_joint_props.origin['rpy'].split())) if 'rpy' in original_joint_props.origin else (0, 0, 0)
-                )
-                # Create the slider joint with explicit type and properties
-                joint = Joint(
-                    name=joint_name,  # Using NameManager's joint name (Slider_XX)
-                    joint_type=original_joint_props.joint_type,  # Use attribute access
-                    parent=parent_name,
-                    child=link_name,
-                    origin=joint_origin,
-                    axis=tuple(map(float, original_joint_props.axis.split())),
-                    limits=original_joint_props.limits,  # Use attribute access
-                    transmission=Transmission(
-                        self.name_manager.get_transmission_name(joint_name),
-                        joint_name
-                    )
-                )
-                print(f"[Rod Joint] Created joint: name={joint.name}, type={joint.joint_type}, parent={joint.parent}, child={joint.child}")
-                self.joints.append(joint)
-
-    def _init_piston_links(self):
-        """Initialize piston links and their revolute joints."""
-        print("\n[Piston Links] Initializing piston links and joints...")
-        
-        # Get original properties
-        original_link_props = extract_link_properties('Stewart.urdf')
-        original_joint_props = extract_joint_properties('Stewart.urdf', "Revolute_")
-
-        # Configure piston links
-        piston_configs = [
-            ("piston11", "rod11", 19),
-            ("piston21", "rod21", 20),
-            ("piston31", "rod31", 21),
-            ("piston61", "rod61", 22),
-            ("piston51", "rod51", 23),
-            ("piston41", "rod41", 24)
-        ]
-
-        for base_name, parent_base, joint_num in piston_configs:
-            print(f"\n[Piston Link] Processing piston {base_name}:")
-            
-            # Get original properties
-            orig_props = original_link_props[base_name]
-            joint_props = original_joint_props[f"Revolute_{joint_num}"]
-
-            # Generate names using name manager
-            link_name = self.name_manager.get_component_name(base_name)
-            parent_name = self.name_manager.get_component_name(parent_base)
-            joint_name = self.name_manager.get_joint_name(joint_num)
-            
-            print(f"  Link name: {link_name}")
-            print(f"  Parent: {parent_name}")
-            print(f"  Joint: {joint_name}")
-
+        """Initialize bottom links and their joints with base."""
+        for base_name, joint_num in StewartPlatformConfig.bottom_configs:
             # Create link
-            link = Link(
-                name=link_name,
-                inertial=Inertial(
-                    origin=Origin(
-                        xyz=tuple(map(float, orig_props.inertial['origin']['xyz'].split())),
-                        rpy=tuple(map(float, orig_props.inertial['origin']['rpy'].split()))
-                    ),
-                    mass=float(orig_props.inertial['mass']),
-                    ixx=float(orig_props.inertial['ixx']),
-                    iyy=float(orig_props.inertial['iyy']),
-                    izz=float(orig_props.inertial['izz']),
-                    ixy=float(orig_props.inertial['ixy']),
-                    iyz=float(orig_props.inertial['iyz']),
-                    ixz=float(orig_props.inertial['ixz'])
-                ),
-                visual=Visual(
-                    origin=Origin(
-                        xyz=tuple(map(float, orig_props.visual['origin']['xyz'].split())),
-                        rpy=tuple(map(float, orig_props.visual['origin']['rpy'].split()))
-                    ),
-                    geometry=Geometry(
-                        mesh_filename=f"meshes/{base_name}.stl",
-                        scale=(0.001, 0.001, 0.001)
-                    )
-                ),
-                collision=Collision(
-                    origin=Origin(
-                        xyz=tuple(map(float, orig_props.visual['origin']['xyz'].split())),
-                        rpy=tuple(map(float, orig_props.visual['origin']['rpy'].split()))
-                    ),
-                    geometry=Geometry(
-                        mesh_filename=f"meshes/{base_name}.stl",
-                        scale=(0.001, 0.001, 0.001)
-                    )
-                )
-            )
-            print(f"  Created link with mesh: meshes/{base_name}.stl")
-
-            # Create joint
-            joint = Joint(
-                name=joint_name,
-                joint_type=joint_props.joint_type,  # Use attribute access
-                parent=parent_name,
-                child=link_name,
-                origin=Origin(
-                    xyz=tuple(map(float, joint_props.origin['xyz'].split())),
-                    rpy=tuple(map(float, joint_props.origin['rpy'].split()))
-                ),
-                axis=tuple(map(float, joint_props.axis.split())),
-                limits=joint_props.limits  # Use attribute access
-            )
-            print(f"  Created joint: name={joint.name}, type={joint.joint_type}, parent={joint.parent}, child={joint.child}")
-
-            # Add transmission for revolute joint
-            joint.transmission = Transmission(
-                name=self.name_manager.get_transmission_name(joint_name),
-                joint_name=joint_name
-            )
-            print(f"  Added transmission: {joint.transmission.name}")
-
-            # Add to URDF
+            link = self.link_factory.create_link(base_name)
             self.links.append(link)
+            
+            # Create joint connecting to base
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_base_link_name(),
+                self.name_manager.get_component_name(base_name)
+            )
             self.joints.append(joint)
-            print(f"  Added link and joint to URDF")
+    
+    def _init_cylinder_links(self):
+        """Initialize cylinder links and their joints with bottom links."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.cylinder_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create joint
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_component_name(parent_base),
+                self.name_manager.get_component_name(base_name)
+            )
+            self.joints.append(joint)
+    
+    def _init_rod_links(self):
+        """Initialize rod links and their slider joints with cylinders."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.rod_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create joint
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_component_name(parent_base),
+                self.name_manager.get_component_name(base_name)
+            )
+            self.joints.append(joint)
+    
+    def _init_piston_links(self):
+        """Initialize piston links and their joints with rods."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.piston_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create joint
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_component_name(parent_base),
+                self.name_manager.get_component_name(base_name)
+            )
+            self.joints.append(joint)
+    
+    def _init_top_links(self):
+        """Initialize top links and their joints with pistons."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.top_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create joint
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_component_name(parent_base),
+                self.name_manager.get_component_name(base_name)
+            )
+            self.joints.append(joint)
 
     def generate(self) -> str:
         """Generate the URDF XML string."""
@@ -818,12 +606,9 @@ class StewartPlatformURDF:
         for link in self.links:
             xml_parts.append(link.to_xml())
             
-        # Add all joints with debug output
-        print("\n[XML Generation] Adding joints:")
+        # Add all joints
         for joint in self.joints:
-            joint_xml = joint.to_xml()
-            print(f"[XML Generation] Joint {joint.name} ({joint.joint_type})")
-            xml_parts.append(joint_xml)
+            xml_parts.append(joint.to_xml())
             
         xml_parts.append('</robot>')
         urdf_str = '\n'.join(xml_parts)
