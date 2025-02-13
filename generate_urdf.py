@@ -192,13 +192,31 @@ class NameManager:
                  - If base_name is "cylinder11", result is "cylinder111" (for stage 1)
                  - If base_name is "rod11", result is "rod111" (for stage 1)
                  - If base_name is "UJ11", result is "UJ111" (for stage 1)
+                 - If base_name is "J1B_1", result is "J1B_11" (for stage 1)
+                 - If base_name is "J3T_1", result is "J3T_11" (for stage 1)
                  - If base_name is "base_link", result is "base_link1" (for stage 1)
         """
+        # Handle base_link specially
+        if base_name == "base_link":
+            return self.get_base_link_name()
+        
+        # For J*T and J*B links, they have special naming with underscore
+        if any(pattern in base_name for pattern in ['J1B_', 'J3T_', 'J5T_']):
+            # Keep the underscore and add stage number
+            return f"{base_name}{self.stage_suffix}"
+        
+        # For other J*T and J*B links without underscore
+        if any(pattern in base_name for pattern in ['J2B', 'J3B', 'J4B', 'J5B', 'J6B',
+                                                   'J1T', 'J2T', 'J4T', 'J6T']):
+            # Just add stage number
+            return f"{base_name}{self.stage_suffix}"
+        
         # For components that already have a number suffix in original URDF
         if base_name.endswith('1'):
             # Just add stage number
             return f"{base_name}{self.stage_suffix}"
-        # For base_link and other components without number suffix
+        
+        # For other components without number suffix
         return f"{base_name}{self.stage_suffix}"
 
     def get_joint_name(self, joint_num: int) -> str:
@@ -247,7 +265,12 @@ class NameManager:
                  - If name is "rod611" and stage is 1, returns "rod61"
                  - If name is "X1bottom11" and stage is 1, returns "X1bottom1"
                  - If name is "UJ111" and stage is 1, returns "UJ11"
+                 - If name is "base_link1" and stage is 1, returns "base_link"
         """
+        # Handle base_link specially
+        if name.startswith(f"{self.base_prefix}base_link"):
+            return "base_link"
+        
         # Handle special cases for components that already have a number suffix
         if any(pattern in name for pattern in ['cylinder', 'rod', 'bottom', 'UJ']):
             # Extract the base name without the stage suffix
@@ -489,6 +512,17 @@ class StewartPlatformConfig:
         ("UJ21", "X2top1", 36)   # Use exact name from UJ21.stl
     ]
 
+    # J*B link configurations and their rigid connections based on Link_graph.txt
+    jb_configs = [
+        # (jb_name, parent_uj, rigid_joint_num)  # Joint numbers from Link_graph.txt
+        ("J1B_1", "UJ11", 59),  # Use exact name from J1B_1.stl
+        ("J2B1", "UJ21", 60),   # Use exact name from J2B1.stl
+        ("J3B1", "UJ31", 61),   # Use exact name from J3B1.stl
+        ("J4B1", "UJ41", 62),   # Use exact name from J4B1.stl
+        ("J5B1", "UJ51", 63),   # Use exact name from J5B1.stl
+        ("J6B1", "UJ61", 64)    # Use exact name from J6B1.stl
+    ]
+
 class StewartPlatformURDF:
     def __init__(self, stage: int = 1, base_prefix: str = "", base_z: float = 0):
         """
@@ -527,6 +561,8 @@ class StewartPlatformURDF:
         self._init_piston_links()
         self._init_top_links()
         self._init_universal_links()
+        self._init_jb_links()
+        self._init_jt_links()
     
     def _init_base_link(self):
         """Initialize the base link."""
@@ -622,6 +658,111 @@ class StewartPlatformURDF:
                 self.name_manager.get_component_name(base_name)
             )
             self.joints.append(joint)
+
+    def _init_jb_links(self):
+        """Initialize J*B links and their rigid connections to universal joints."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.jb_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create rigid joint connecting to universal joint
+            joint = Joint(
+                name=f"Rigid_{joint_num}{self.stage}",
+                joint_type="fixed",
+                parent=self.name_manager.get_component_name(parent_base),
+                child=self.name_manager.get_component_name(base_name),
+                        origin=Origin(
+                    xyz=tuple(map(float, self.original_joint_props[f"Rigid_{joint_num}"].origin['xyz'].split())),
+                    rpy=tuple(map(float, self.original_joint_props[f"Rigid_{joint_num}"].origin['rpy'].split()))
+                ),
+                axis=(0, 0, 0)  # Fixed joints don't need an axis
+                )
+            self.joints.append(joint)
+
+    def _init_jt_links(self):
+        """Initialize J*T links and their rigid connections."""
+        # First create J6T1 and connect it to J6B1
+        j6t_link = self.link_factory.create_link("J6T1")
+        self.links.append(j6t_link)
+        
+        # Add rigid joint connecting J6B1 to J6T1
+        j6t_joint = Joint(
+            name=f"Rigid_65{self.stage}",
+            joint_type="fixed",
+            parent=self.name_manager.get_component_name("J6B1"),
+            child=self.name_manager.get_component_name("J6T1"),
+            origin=Origin(
+                xyz=tuple(map(float, self.original_joint_props["Rigid_65"].origin['xyz'].split())),
+                rpy=tuple(map(float, self.original_joint_props["Rigid_65"].origin['rpy'].split()))
+            ),
+            axis=(0, 0, 0)  # Fixed joints don't need an axis
+        )
+        self.joints.append(j6t_joint)
+
+        # Create TOP1 link
+        top_link = self.link_factory.create_link("TOP1")
+        self.links.append(top_link)
+
+        # Add rigid joint connecting J6T1 to TOP1
+        top_joint = Joint(
+            name=f"Rigid_66{self.stage}",
+            joint_type="fixed",
+            parent=self.name_manager.get_component_name("J6T1"),
+            child=self.name_manager.get_component_name("TOP1"),
+            origin=Origin(
+                xyz=tuple(map(float, self.original_joint_props["Rigid_66"].origin['xyz'].split())),
+                rpy=tuple(map(float, self.original_joint_props["Rigid_66"].origin['rpy'].split()))
+            ),
+            axis=(0, 0, 0)
+        )
+        self.joints.append(top_joint)
+
+        # Create and connect other J*T links to TOP1
+        jt_configs = [
+            ("J1T1", 67),
+            ("J2T1", 68),
+            ("J3T_1", 69),  # Note: J3T_1 has underscore
+            ("J4T1", 70),
+            ("J5T_1", 71)   # Note: J5T_1 has underscore
+        ]
+
+        for base_name, joint_num in jt_configs:
+            # Create J*T link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Add rigid joint connecting TOP1 to J*T
+            joint = Joint(
+                name=f"Rigid_{joint_num}{self.stage}",
+                joint_type="fixed",
+                parent=self.name_manager.get_component_name("TOP1"),
+                child=self.name_manager.get_component_name(base_name),
+                origin=Origin(
+                    xyz=tuple(map(float, self.original_joint_props[f"Rigid_{joint_num}"].origin['xyz'].split())),
+                    rpy=tuple(map(float, self.original_joint_props[f"Rigid_{joint_num}"].origin['rpy'].split()))
+                ),
+                axis=(0, 0, 0)
+            )
+            self.joints.append(joint)
+
+        # Create indicator1 link
+        indicator_link = self.link_factory.create_link("indicator1")
+        self.links.append(indicator_link)
+
+        # Add rigid joint connecting TOP1 to indicator1
+        indicator_joint = Joint(
+            name=f"Rigid_77{self.stage}",
+            joint_type="fixed",
+            parent=self.name_manager.get_component_name("TOP1"),
+            child=self.name_manager.get_component_name("indicator1"),
+            origin=Origin(
+                xyz=tuple(map(float, self.original_joint_props["Rigid_77"].origin['xyz'].split())),
+                rpy=tuple(map(float, self.original_joint_props["Rigid_77"].origin['rpy'].split()))
+            ),
+            axis=(0, 0, 0)
+        )
+        self.joints.append(indicator_joint)
 
     def generate(self) -> str:
         """Generate the URDF XML string."""
