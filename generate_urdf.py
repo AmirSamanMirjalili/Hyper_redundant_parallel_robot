@@ -419,7 +419,7 @@ class JointFactory:
 @dataclass
 class StewartPlatformConfig:
     """Configuration data for Stewart platform components."""
-    # Bottom link configurations based on Link_graph.txt and mesh files
+        # Bottom link configurations based on Link_graph.txt and mesh files
     bottom_configs = [
         # (name, joint_num)  # Joint numbers from Link_graph.txt
         ("X1bottom1", 1),  # Use exact name from X1bottom1.stl
@@ -429,7 +429,7 @@ class StewartPlatformConfig:
         ("X4bottom1", 5),  # Use exact name from X4bottom1.stl
         ("X3bottom1", 6)   # Use exact name from X3bottom1.stl
     ]
-
+    
     # Cylinder configurations based on Link_graph.txt and mesh files
     cylinder_configs = [
         # (cylinder_name, parent_bottom_link, joint_num)
@@ -452,20 +452,20 @@ class StewartPlatformConfig:
         ("rod61", "cylinder61", 18)   # Use exact name from rod61.stl
     ]
 
-    # Piston configurations based on Link_graph.txt and mesh files
+# Piston configurations based on Link_graph.txt and mesh files
     piston_configs = [
-        # (piston_name, parent_rod, joint_num)
-        ("piston11", "rod11", 19),  # Use exact name from piston11.stl
-        ("piston21", "rod21", 20),  # Use exact name from piston21.stl
-        ("piston31", "rod31", 21),  # Use exact name from piston31.stl
-        ("piston61", "rod61", 22),  # Use exact name from piston61.stl
-        ("piston51", "rod51", 23),  # Use exact name from piston51.stl
-        ("piston41", "rod41", 24)   # Use exact name from piston41.stl
-    ]
-
+    # (piston_name, parent_rod, joint_num)
+    ("piston11", "rod11", 19),  # Use exact name from piston11.stl
+    ("piston21", "rod21", 20),  # Use exact name from piston21.stl
+    ("piston31", "rod31", 21),  # Use exact name from piston31.stl
+    ("piston61", "rod61", 22),  # Use exact name from piston61.stl
+    ("piston51", "rod51", 23),  # Use exact name from piston51.stl
+    ("piston41", "rod41", 24)   # Use exact name from piston41.stl
+]
+    
     # Top link configurations based on Link_graph.txt and mesh files
     top_configs = [
-        # (top_name, parent_piston, joint_num)
+    # (top_name, parent_piston, joint_num)
         ("X1top1", "piston11", 26),  # Use exact name from X1top1.stl
         ("X2top1", "piston21", 35),  # Use exact name from X2top1.stl
         ("X3top1", "piston31", 33),  # Use exact name from X3top1.stl
@@ -589,7 +589,7 @@ class StewartPlatformURDF:
                 joint_num,
                 self.name_manager.get_component_name(parent_base),
                 self.name_manager.get_component_name(base_name)
-            )
+                )
             self.joints.append(joint)
 
     def generate(self) -> str:
