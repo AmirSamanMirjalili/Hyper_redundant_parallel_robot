@@ -184,13 +184,14 @@ class NameManager:
         that original names from mesh files are preserved while adding the stage number.
 
         Args:
-            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11").
+            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11", "UJ11").
 
         Returns:
             str: A unique name for the component, including the stage suffix.
                  - If base_name is "X1bottom1", result is "X1bottom11" (for stage 1)
                  - If base_name is "cylinder11", result is "cylinder111" (for stage 1)
                  - If base_name is "rod11", result is "rod111" (for stage 1)
+                 - If base_name is "UJ11", result is "UJ111" (for stage 1)
                  - If base_name is "base_link", result is "base_link1" (for stage 1)
         """
         # For components that already have a number suffix in original URDF
@@ -213,6 +214,7 @@ class NameManager:
                  For example:
                  - If joint_num is 3, result is "Revolute_31" (for stage 1)
                  - If joint_num is 13, result is "Slider_131" (for stage 1)
+                 - If joint_num is 29, result is "Revolute_291" (for stage 1)
         """
         # Use Slider_ prefix for joints 13-18, Revolute_ for others
         prefix = "Slider_" if 13 <= joint_num <= 18 else "Revolute_"
@@ -244,9 +246,10 @@ class NameManager:
                  - If name is "cylinder611" and stage is 1, returns "cylinder61"
                  - If name is "rod611" and stage is 1, returns "rod61"
                  - If name is "X1bottom11" and stage is 1, returns "X1bottom1"
+                 - If name is "UJ111" and stage is 1, returns "UJ11"
         """
         # Handle special cases for components that already have a number suffix
-        if any(pattern in name for pattern in ['cylinder', 'rod', 'bottom']):
+        if any(pattern in name for pattern in ['cylinder', 'rod', 'bottom', 'UJ']):
             # Extract the base name without the stage suffix
             match = re.match(r'([A-Za-z]+\d+)(\d+)', name)
             if match:
@@ -280,13 +283,14 @@ class NameManager:
         file name without any stage suffix.
 
         Args:
-            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11").
+            base_name (str): The base name of the component (e.g., "X1bottom1", "cylinder11", "rod11", "UJ11").
 
         Returns:
             str: The filename of the mesh.
                  - If base_name is "X1bottom1", result is "meshes/X1bottom1.stl"
                  - If base_name is "cylinder11", result is "meshes/cylinder11.stl"
                  - If base_name is "rod11", result is "meshes/rod11.stl"
+                 - If base_name is "UJ11", result is "meshes/UJ11.stl"
                  - If base_name is "base_link", result is "meshes/base_link.stl"
         """
         return f"meshes/{base_name}.stl"
@@ -419,7 +423,7 @@ class JointFactory:
 @dataclass
 class StewartPlatformConfig:
     """Configuration data for Stewart platform components."""
-        # Bottom link configurations based on Link_graph.txt and mesh files
+    # Bottom link configurations based on Link_graph.txt and mesh files
     bottom_configs = [
         # (name, joint_num)  # Joint numbers from Link_graph.txt
         ("X1bottom1", 1),  # Use exact name from X1bottom1.stl
@@ -452,26 +456,37 @@ class StewartPlatformConfig:
         ("rod61", "cylinder61", 18)   # Use exact name from rod61.stl
     ]
 
-# Piston configurations based on Link_graph.txt and mesh files
+    # Piston configurations based on Link_graph.txt and mesh files
     piston_configs = [
-    # (piston_name, parent_rod, joint_num)
-    ("piston11", "rod11", 19),  # Use exact name from piston11.stl
-    ("piston21", "rod21", 20),  # Use exact name from piston21.stl
-    ("piston31", "rod31", 21),  # Use exact name from piston31.stl
-    ("piston61", "rod61", 22),  # Use exact name from piston61.stl
-    ("piston51", "rod51", 23),  # Use exact name from piston51.stl
-    ("piston41", "rod41", 24)   # Use exact name from piston41.stl
-]
+        # (piston_name, parent_rod, joint_num)
+        ("piston11", "rod11", 19),  # Use exact name from piston11.stl
+        ("piston21", "rod21", 20),  # Use exact name from piston21.stl
+        ("piston31", "rod31", 21),  # Use exact name from piston31.stl
+        ("piston61", "rod61", 22),  # Use exact name from piston61.stl
+        ("piston51", "rod51", 23),  # Use exact name from piston51.stl
+        ("piston41", "rod41", 24)   # Use exact name from piston41.stl
+    ]
     
     # Top link configurations based on Link_graph.txt and mesh files
     top_configs = [
-    # (top_name, parent_piston, joint_num)
+        # (top_name, parent_piston, joint_num)
         ("X1top1", "piston11", 26),  # Use exact name from X1top1.stl
         ("X2top1", "piston21", 35),  # Use exact name from X2top1.stl
         ("X3top1", "piston31", 33),  # Use exact name from X3top1.stl
         ("X4top1", "piston41", 27),  # Use exact name from X4top1.stl
         ("X5top1", "piston51", 28),  # Use exact name from X5top1.stl
         ("X6top1", "piston61", 25)   # Use exact name from X6top1.stl
+    ]
+
+    # Universal joint configurations based on Link_graph.txt and mesh files
+    universal_joint_configs = [
+        # (uj_name, parent_top_link, joint_num)  # Joint numbers from Link_graph.txt
+        ("UJ11", "X1top1", 29),  # Use exact name from UJ11.stl
+        ("UJ61", "X6top1", 30),  # Use exact name from UJ61.stl
+        ("UJ51", "X5top1", 31),  # Use exact name from UJ51.stl
+        ("UJ41", "X4top1", 32),  # Use exact name from UJ41.stl
+        ("UJ31", "X3top1", 34),  # Use exact name from UJ31.stl
+        ("UJ21", "X2top1", 36)   # Use exact name from UJ21.stl
     ]
 
 class StewartPlatformURDF:
@@ -481,7 +496,7 @@ class StewartPlatformURDF:
         
         Args:
             stage: The stage number of this platform (1, 2, 3, etc.)
-            base_prefix: Prefix for the base link name (e.g., "upper_", "lower_")
+            base_prefix: Prefix for the base link name
             base_z: Z-offset for the entire platform
         """
         self.stage = stage
@@ -511,6 +526,7 @@ class StewartPlatformURDF:
         self._init_rod_links()
         self._init_piston_links()
         self._init_top_links()
+        self._init_universal_links()
     
     def _init_base_link(self):
         """Initialize the base link."""
@@ -538,7 +554,7 @@ class StewartPlatformURDF:
             # Create link
             link = self.link_factory.create_link(base_name)
             self.links.append(link)
-            
+
             # Create joint
             joint = self.joint_factory.create_joint(
                 joint_num,
@@ -576,7 +592,7 @@ class StewartPlatformURDF:
                 self.name_manager.get_component_name(base_name)
             )
             self.joints.append(joint)
-    
+
     def _init_top_links(self):
         """Initialize top links and their joints with pistons."""
         for base_name, parent_base, joint_num in StewartPlatformConfig.top_configs:
@@ -589,7 +605,22 @@ class StewartPlatformURDF:
                 joint_num,
                 self.name_manager.get_component_name(parent_base),
                 self.name_manager.get_component_name(base_name)
-                )
+            )
+            self.joints.append(joint)
+
+    def _init_universal_links(self):
+        """Initialize universal joint links and their connections with top links."""
+        for base_name, parent_base, joint_num in StewartPlatformConfig.universal_joint_configs:
+            # Create link
+            link = self.link_factory.create_link(base_name)
+            self.links.append(link)
+            
+            # Create joint connecting to top link
+            joint = self.joint_factory.create_joint(
+                joint_num,
+                self.name_manager.get_component_name(parent_base),
+                self.name_manager.get_component_name(base_name)
+            )
             self.joints.append(joint)
 
     def generate(self) -> str:
