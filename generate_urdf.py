@@ -248,9 +248,75 @@ class NameManager:
             str: The name of the transmission, which is the joint name with "_tran" appended.
                  For example:
                  - If joint_name is "Revolute_32", result is "Revolute_32_tran"
-                 - If joint_name is "Slider_132", result is "Slider_132_tran"
         """
         return f"{joint_name}_tran"
+
+    def get_rigid_joint_configs(self) -> List[Tuple[int, str, str]]:
+        """Get the list of rigid joint configurations.
+
+        Returns:
+            List[Tuple[int, str, str]]: List of tuples containing (joint_num, parent, child)
+                                       for all rigid joints in the platform.
+        """
+        return [
+            # (joint_num, parent, child)
+            (59, "UJ11", "J1B_1"),
+            (60, "UJ21", "J2B1"),
+            (61, "UJ31", "J3B1"),
+            (62, "UJ41", "J4B1"),
+            (63, "UJ51", "J5B1"),
+            (64, "UJ61", "J6B1"),
+            (65, "J6B1", "J6T1"),
+            (66, "J6T1", "TOP1"),
+            (67, "TOP1", "J1T1"),
+            (68, "TOP1", "J2T1"),
+            (69, "TOP1", "J3T_1"),
+            (70, "TOP1", "J4T1"),
+            (71, "TOP1", "J5T_1"),
+            (77, "TOP1", "indicator1")
+        ]
+
+    def get_rigid_joint_name(self, parent: str, child: str) -> str:
+        """Get the name of a rigid joint connecting parent to child.
+
+        Args:
+            parent (str): The parent link name.
+            child (str): The child link name.
+
+        Returns:
+            str: The name of the rigid joint with stage suffix.
+                 For example:
+                 - If parent is "UJ11" and child is "J1B_1", result is "Rigid_591" (for stage 1)
+
+        Raises:
+            ValueError: If no rigid joint configuration is found for the given parent and child.
+        """
+        # Find the joint number for this connection
+        for joint_num, p, c in self.get_rigid_joint_configs():
+            if p == self.strip_stage_suffix(parent) and c == self.strip_stage_suffix(child):
+                return f"Rigid_{joint_num}{self.stage_suffix}"
+        raise ValueError(f"No rigid joint configuration found for {parent} -> {child}")
+
+    def get_original_rigid_joint_name(self, parent: str, child: str) -> str:
+        """Get the original name of a rigid joint without stage suffix.
+
+        Args:
+            parent (str): The parent link name.
+            child (str): The child link name.
+
+        Returns:
+            str: The original name of the rigid joint without stage suffix.
+                 For example:
+                 - If parent is "UJ11" and child is "J1B_1", result is "Rigid_59"
+
+        Raises:
+            ValueError: If no rigid joint configuration is found for the given parent and child.
+        """
+        # Find the joint number for this connection
+        for joint_num, p, c in self.get_rigid_joint_configs():
+            if p == self.strip_stage_suffix(parent) and c == self.strip_stage_suffix(child):
+                return f"Rigid_{joint_num}"
+        raise ValueError(f"No rigid joint configuration found for {parent} -> {child}")
 
     def strip_stage_suffix(self, name: str) -> str:
         """Remove stage suffix from a name.
