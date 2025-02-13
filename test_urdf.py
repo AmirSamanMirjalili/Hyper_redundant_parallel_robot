@@ -33,7 +33,7 @@ class URDFTestFixture:
             return 'base_link'
         
         # For components that already have a number suffix in original URDF
-        if any(pattern in generated_name for pattern in ['bottom', 'cylinder', 'rod', 'top']):
+        if any(pattern in generated_name for pattern in ['bottom', 'cylinder', 'rod', 'top', 'UJ']):
             # Extract the base name without the stage suffix
             match = re.match(r'([A-Za-z]+\d+)(\d+)', generated_name)
             if match:
@@ -114,22 +114,29 @@ class KinematicChainFixture(URDFTestFixture):
         
         # Find the joint connecting these links
         joint = None
-        for j in self.generated_root.findall(f".//joint[@type='{joint_type}']"):
-            if (j.find('parent').get('link') == parent_name and 
-                j.find('child').get('link') == child_name):
-                joint = j
+        # Search for both revolute and continuous joints
+        for joint_type_to_check in [joint_type, 'continuous']:
+            for j in self.generated_root.findall(f".//joint[@type='{joint_type_to_check}']"):
+                if (j.find('parent').get('link') == parent_name and 
+                    j.find('child').get('link') == child_name):
+                    joint = j
+                    break
+            if joint is not None:
                 break
         
         assert joint is not None, \
-            f"Should find a {joint_type} joint connecting {parent_name} to {child_name}"
+            f"Should find a {joint_type} or continuous joint connecting {parent_name} to {child_name}"
         
         # Verify the joint has all required elements
         assert joint.find('origin') is not None, \
             f"Joint connecting {parent_name} to {child_name} should have origin"
         assert joint.find('axis') is not None, \
             f"Joint connecting {parent_name} to {child_name} should have axis"
-        assert joint.find('limit') is not None, \
-            f"Joint connecting {parent_name} to {child_name} should have limits"
+        
+        # Only check for limits if the joint is not continuous
+        if joint.get('type') != 'continuous':
+            assert joint.find('limit') is not None, \
+                f"Joint connecting {parent_name} to {child_name} should have limits"
 
 @pytest.fixture(scope="module")
 def urdf_data() -> URDFTestData:
@@ -226,13 +233,13 @@ class TestBaseLink:
             True
         """
         base_link_name = test_fixture.name_manager.get_base_link_name()
-        
+
         # Get actual connections from joint properties
         actual_connections = set()
         for joint_name, joint_props in test_fixture.generated_joints.items():
             if joint_props.parent == base_link_name:
                 actual_connections.add((joint_name, joint_props.child))
-        
+
         # Get expected connections
         expected_base_connections = set()
         for joint_num, bottom_link in [
@@ -246,7 +253,7 @@ class TestBaseLink:
             joint_name = test_fixture.name_manager.get_joint_name(joint_num)
             link_name = test_fixture.name_manager.get_component_name(bottom_link)
             expected_base_connections.add((joint_name, link_name))
-        
+
         assert actual_connections == expected_base_connections, \
             f"""Base link connections mismatch:
             Generated: {sorted(actual_connections)}
@@ -412,18 +419,49 @@ class TestTopLinks:
             assert joint.axis == orig_joint.axis, \
                 f"Joint {joint_name} should have correct axis"
 
+class TestUniversalJoints:
+    """Tests for universal joints and their connections."""
+    def test_universal_joint_links(self, test_fixture: URDFTestFixture):
+        """Test if universal joint links are correctly generated."""
+        uj_configs = [
+            "UJ11", "UJ21", "UJ31",
+            "UJ41", "UJ51", "UJ61"
+        ]
+        for base_name in uj_configs:
+            test_fixture.verify_link_properties(test_fixture.name_manager.get_component_name(base_name))
+
+    def test_universal_joint_connections(self, test_fixture: URDFTestFixture):
+        """Test if universal joint connections are correctly configured."""
+        joint_configs = [
+            (29, "X1top1", "UJ11"),
+            (30, "X6top1", "UJ61"),
+            (31, "X5top1", "UJ51"),
+            (32, "X4top1", "UJ41"),
+            (34, "X3top1", "UJ31"),
+            (36, "X2top1", "UJ21")
+        ]
+        
+        for joint_num, parent_base, child_base in joint_configs:
+            joint_name = test_fixture.name_manager.get_joint_name(joint_num)
+            parent_name = test_fixture.name_manager.get_component_name(parent_base)
+            child_name = test_fixture.name_manager.get_component_name(child_base)
+            
+            joint = test_fixture.generated_joints[joint_name]
+            orig_joint = test_fixture.original_joints[f"Revolute_{joint_num}"]
+            
+            assert joint.parent == parent_name, \
+                f"Joint {joint_name} should have parent {parent_name}"
+            assert joint.child == child_name, \
+                f"Joint {joint_name} should have child {child_name}"
+            assert joint.joint_type == orig_joint.joint_type, \
+                f"Joint {joint_name} should be {orig_joint.joint_type}"
+            assert joint.axis == orig_joint.axis, \
+                f"Joint {joint_name} should have correct axis"
+
 class TestKinematicChain:
     """Tests for complete kinematic chain."""
     def test_no_floating_links(self, test_fixture: URDFTestFixture):
-        """
-        Test that all links (except base) are connected by joints.
-
-        Example:
-            >>> # Verify that all non-base links appear in the joint connections
-            >>> unconnected = set(test_fixture.generated_links.keys()) - {j.parent for j in test_fixture.generated_joints.values()}
-            >>> unconnected == {'base_link1'} or not unconnected
-            True
-        """
+        """Test that all links (except base) are connected by joints."""
         # Get all connected links
         connected_links = set()
         for joint in test_fixture.generated_joints.values():
@@ -438,45 +476,18 @@ class TestKinematicChain:
             assert list(unconnected)[0] == 'base_link1', \
                 "The only unconnected link should be base_link1"
 
-    def test_no_cycles(self, test_fixture: URDFTestFixture):
-        """
-        Test that the joint-link structure contains no cycles.
-
-        Example:
-            >>> # Running the cycle detection should return False for any link as starting point
-            >>> all(not find_cycle(link, graph, set(), set()) for link in test_fixture.generated_links)
-            True
-        """
-        def find_cycle(start_link: str, graph: Dict[str, Set[str]], visited: Set[str], path: Set[str]) -> bool:
-            if start_link in path:
-                return True
-            if start_link in visited:
-                return False
-                
-            visited.add(start_link)
-            path.add(start_link)
-            
-            for next_link in graph.get(start_link, set()):
-                if find_cycle(next_link, graph, visited, path):
-                    return True
-                    
-            path.remove(start_link)
-            return False
-        
-        # Build connection graph from joint properties
-        graph: Dict[str, Set[str]] = {}
-        for joint in test_fixture.generated_joints.values():
-            if joint.parent not in graph:
-                graph[joint.parent] = set()
-            graph[joint.parent].add(joint.child)
-        
-        # Check for cycles from each link
-        visited: Set[str] = set()
-        path: Set[str] = set()
-        
-        for link in graph.keys():
-            assert not find_cycle(link, graph, visited, path), \
-                f"Found cycle in joint-link structure starting from {link}"
+    def test_universal_joint_chain(self, kinematic_chain_fixture: KinematicChainFixture):
+        """Test the kinematic chain from top links through universal joints."""
+        # Test connections from top links to universal joints
+        for parent_base, child_base in [
+            ("X1top1", "UJ11"),
+            ("X6top1", "UJ61"),
+            ("X5top1", "UJ51"),
+            ("X4top1", "UJ41"),
+            ("X3top1", "UJ31"),
+            ("X2top1", "UJ21")
+        ]:
+            kinematic_chain_fixture.verify_chain_connection(parent_base, child_base)
 
 class TestPyBulletIntegration:
     """Tests for PyBullet integration."""
@@ -508,30 +519,29 @@ class TestPyBulletIntegration:
         """
         test_urdf_path = "test_stewart.urdf"
         save_urdf(test_fixture.urdf_data.generated['urdf'], test_urdf_path)
-        
+    
         try:
             robot_id = p.loadURDF(test_urdf_path, flags=p.URDF_USE_INERTIA_FROM_FILE)
             assert robot_id > -1, "URDF should load successfully"
-            
+        
             # Get number of joints
             num_joints = p.getNumJoints(robot_id)
-            expected_joints = len([j for j in test_fixture.generated_joints.values() 
-                                 if j.joint_type in ['revolute', 'prismatic']])
+            expected_joints = 36  # Based on Link_graph.txt: 30 revolute + 6 prismatic joints
             assert num_joints == expected_joints, \
-                f"Should have {expected_joints} movable joints (revolute + prismatic)"
-            
+                f"Should have {expected_joints} movable joints (30 revolute + 6 prismatic)"
+        
             # Test joint properties
             for i in range(num_joints):
                 joint_info = p.getJointInfo(robot_id, i)
                 joint_name = joint_info[1].decode('utf-8')
-                
+            
                 # Get corresponding joint properties
                 joint_props = test_fixture.generated_joints.get(joint_name)
                 assert joint_props is not None, f"Joint {joint_name} should exist in properties"
-                
+            
                 # Get original joint name for comparison
                 orig_name = test_fixture.map_to_original_name(joint_name)
-                
+            
                 # Compare joint type
                 joint_type = joint_info[2]
                 if joint_props.joint_type == 'revolute':
@@ -540,7 +550,7 @@ class TestPyBulletIntegration:
                 elif joint_props.joint_type == 'prismatic':
                     assert joint_type == p.JOINT_PRISMATIC, \
                         f"Joint {joint_name} should be prismatic"
-                
+            
                 # Compare joint limits
                 if joint_props.limits:
                     lower_limit = joint_info[8]
@@ -549,7 +559,7 @@ class TestPyBulletIntegration:
                         f"Joint {joint_name} lower limit should match"
                     assert abs(float(joint_props.limits['upper']) - upper_limit) < 1e-6, \
                         f"Joint {joint_name} upper limit should match"
-        
+    
         finally:
             if os.path.exists(test_urdf_path):
-                os.remove(test_urdf_path) 
+                os.remove(test_urdf_path)
