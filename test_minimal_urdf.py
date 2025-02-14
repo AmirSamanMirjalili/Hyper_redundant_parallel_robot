@@ -96,7 +96,9 @@ def main():
     # Generate and save combined URDF
     stages = [
         (1, "lower_", 0),      # Stage 1 at z=0
-        (2, "upper_", 0.08)    # Stage 2 with small offset for visualization
+        (2, "upper_", 0),   # Stage 2 with 8cm spacing from Stage 1
+        (3, "upper2_", 0),   # Stage 3 with 8cm spacing from Stage 2
+        (4, "upper3_", 0),   # Stage 4 with 8cm spacing from Stage 3
     ]
     urdf_path = "stewart_combined.urdf"
     urdf_string, all_joint_pairs = generate_stewart_platform(stages)
