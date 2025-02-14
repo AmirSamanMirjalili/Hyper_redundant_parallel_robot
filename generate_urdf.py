@@ -925,7 +925,7 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
         stages: List of tuples, each containing:
                - stage number (int)
                - base prefix (str)
-               - z-offset (float)
+               - z-offset (float) - The spacing between this stage and the previous one
                Default is a single stage at z=0.
         
     Returns:
@@ -944,11 +944,16 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
     
     # Generate each stage and collect joint pairs
     all_joint_pairs = []
-    accumulated_height = 0
     
-    for i, (stage_num, base_prefix, base_z) in enumerate(stages):
-        # Create the platform with the accumulated height
-        platform = StewartPlatformURDF(stage_num, base_prefix, accumulated_height)
+    # Calculate absolute heights for each stage
+    stage_heights = [0]  # First stage starts at 0
+    for i in range(1, len(stages)):
+        # Each stage's height is the previous stage's height plus the specified offset
+        stage_heights.append(stage_heights[i-1] + stages[i][2])
+    
+    for i, ((stage_num, base_prefix, _), stage_height) in enumerate(zip(stages, stage_heights)):
+        # Create the platform at its absolute height
+        platform = StewartPlatformURDF(stage_num, base_prefix, stage_height)
         
         # Add all links and joints from this stage
         for link in platform.links:
@@ -964,7 +969,7 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
             next_stage = stages[i + 1]
             next_stage_prefix = next_stage[1]
             next_stage_num = next_stage[0]
-            next_stage_z = next_stage[2]
+            next_stage_z = next_stage[2]  # This is the offset to the next stage
             
             # Get the TOP1 link properties from the original URDF
             top_props = platform.original_link_props["TOP1"]
@@ -983,7 +988,7 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
             # Calculate the offset needed to align the centers
             offset_x = top_origin.xyz[0] - base_origin.xyz[0]
             offset_y = top_origin.xyz[1] - base_origin.xyz[1]
-            offset_z = next_stage_z  # Use the specified z-offset for height
+            offset_z = next_stage_z  # Use the direct offset for consistent spacing
             
             # Create fixed joint between TOP1 of current stage and base_link of next stage
             connection_joint = Joint(
@@ -991,7 +996,7 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
                 joint_type="fixed",
                 parent=platform.name_manager.get_component_name("TOP1"),
                 child=f"{next_stage_prefix}base_link{next_stage_num}",
-                # Set the origin to align the centers
+                # Set the origin to align the centers with consistent spacing
                 origin=Origin(
                     xyz=(offset_x, offset_y, offset_z),
                     rpy=(0, 0, 0)  # Maintain orientation
@@ -999,9 +1004,6 @@ def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)
                 axis=(0, 0, 0)  # Fixed joint doesn't need an axis
             )
             xml_parts.append(connection_joint.to_xml())
-        
-        # Update accumulated height for next stage
-        accumulated_height += base_z
     
     # Close the URDF
     xml_parts.append('</robot>')
