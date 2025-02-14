@@ -460,10 +460,29 @@ class LinkFactory:
         )
 
     def _apply_z_offset(self, origin: Origin) -> Origin:
-        """Apply the base_z offset to an origin."""
+        """Apply the base_z offset to an origin.
+        
+        This method applies the z-offset while preserving the original orientation.
+        For joints, the offset is applied relative to the parent link's frame.
+        For links, the offset is applied in the world frame.
+        
+        Args:
+            origin: The original origin to offset
+            
+        Returns:
+            Origin: The offset origin with preserved orientation
+        """
+        # Create new origin with offset z-coordinate
+        new_xyz = (
+            origin.xyz[0],
+            origin.xyz[1],
+            origin.xyz[2] + self.base_z
+        )
+        
+        # Keep the original orientation
         return Origin(
-            (origin.xyz[0], origin.xyz[1], origin.xyz[2] + self.base_z),
-            origin.rpy
+            xyz=new_xyz,
+            rpy=origin.rpy
         )
 
 @dataclass
@@ -471,6 +490,7 @@ class JointFactory:
     """Factory class for creating joints with consistent properties."""
     name_manager: NameManager
     original_props: Dict[str, JointProperties]
+    base_z: float = 0  # Add base_z to track vertical offset
     
     def create_joint(self, joint_num: int, parent: str, child: str) -> Joint:
         """Create a joint with properties from original URDF.
@@ -489,11 +509,22 @@ class JointFactory:
         else:
             orig_props = self.original_props[f"Revolute_{joint_num}"]
         
-        # Create origin
-        joint_origin = Origin(
-            xyz=tuple(map(float, orig_props.origin['xyz'].split())),
-            rpy=tuple(map(float, orig_props.origin['rpy'].split())) if 'rpy' in orig_props.origin else (0, 0, 0)
-        )
+        # Get original origin values
+        orig_xyz = tuple(map(float, orig_props.origin['xyz'].split()))
+        orig_rpy = tuple(map(float, orig_props.origin['rpy'].split())) if 'rpy' in orig_props.origin else (0, 0, 0)
+        
+        # For joints connecting to base_link, we need to offset the z coordinate
+        if parent.endswith(f"base_link{self.name_manager.stage_suffix}"):
+            joint_origin = Origin(
+                xyz=(orig_xyz[0], orig_xyz[1], orig_xyz[2] + self.base_z),
+                rpy=orig_rpy
+            )
+        else:
+            # For other joints, keep original coordinates as they're relative to their parent
+            joint_origin = Origin(xyz=orig_xyz, rpy=orig_rpy)
+        
+        # Get original axis values
+        axis = tuple(map(float, orig_props.axis.split()))
         
         return Joint(
             name=joint_name,
@@ -501,7 +532,7 @@ class JointFactory:
             parent=parent,
             child=child,
             origin=joint_origin,
-            axis=tuple(map(float, orig_props.axis.split())),
+            axis=axis,
             limits=orig_props.limits,
             transmission=Transmission(
                 self.name_manager.get_transmission_name(joint_name),
@@ -607,9 +638,9 @@ class StewartPlatformURDF:
         self.original_joint_props = extract_joint_properties("Stewart.urdf")
         self.original_link_props = extract_link_properties("Stewart.urdf")
         
-        # Create factories
+        # Create factories with base_z
         self.link_factory = LinkFactory(self.name_manager, self.original_link_props, self.base_z)
-        self.joint_factory = JointFactory(self.name_manager, self.original_joint_props)
+        self.joint_factory = JointFactory(self.name_manager, self.original_joint_props, self.base_z)
         
         # Initialize component lists
         self.links: List[Link] = []
@@ -830,6 +861,32 @@ class StewartPlatformURDF:
         )
         self.joints.append(indicator_joint)
 
+    def get_joint_pair_indices(self) -> List[Tuple[int, int]]:
+        """Get the joint pair indices for this stage of the Stewart Platform.
+        
+        These pairs represent the rigid joints that need to be constrained together to form
+        closed chains in the Stewart Platform simulation. The pairs connect:
+        1. Each universal joint (UJ) to its base joint (J*B) via Rigid_59-64
+        2. The top platform (TOP1) to each top joint (J*T) via Rigid_67-71
+        
+        Returns:
+            List[Tuple[int, int]]: List of tuples containing (parent_joint, child_joint) indices.
+                                  For stage N, the joint numbers will have N appended.
+        """
+        # Rigid joint pairs that form closed kinematic chains
+        rigid_pairs = [
+            (59, 67),  # UJ11->J1B_1 to TOP1->J1T1
+            (60, 68),  # UJ21->J2B1 to TOP1->J2T1
+            (61, 69),  # UJ31->J3B1 to TOP1->J3T_1
+            (62, 70),  # UJ41->J4B1 to TOP1->J4T1
+            (63, 71),  # UJ51->J5B1 to TOP1->J5T_1
+        ]
+        
+        # Add stage suffix to each joint number
+        stage_pairs = [(j1 * 10 + self.stage, j2 * 10 + self.stage) for j1, j2 in rigid_pairs]
+        
+        return stage_pairs
+
     def generate(self) -> str:
         """Generate the URDF XML string."""
         xml_parts = [
@@ -860,17 +917,104 @@ class StewartPlatformURDF:
             print(f"[XML Error] Failed to parse generated XML: {e}")
             raise
 
-def generate_stewart_platform(stage: int = 1, base_prefix: str = "", base_z: float = 0) -> str:
+def generate_stewart_platform(stages: List[Tuple[int, str, float]] = [(1, "", 0)]) -> Tuple[str, List[List[Tuple[int, int]]]]:
     """
-    Generate URDF string for a Stewart platform.
+    Generate URDF string and joint pair indices for multiple stages of Stewart platforms.
     
     Args:
-        stage: The stage number (1, 2, 3, etc.)
-        base_prefix: Prefix for the base link name
-        base_z: Z-offset for the entire platform
+        stages: List of tuples, each containing:
+               - stage number (int)
+               - base prefix (str)
+               - z-offset (float)
+               Default is a single stage at z=0.
+        
+    Returns:
+        Tuple[str, List[List[Tuple[int, int]]]]: A tuple containing:
+            - The combined URDF XML string for all stages
+            - List of joint pair indices for each stage's closed chain constraints
     """
-    platform = StewartPlatformURDF(stage, base_prefix, base_z)
-    return platform.generate()
+    # Start the combined URDF
+    xml_parts = [
+        '<?xml version="1.0" ?>',
+        '<robot name="Stewart_Combined">',
+        '<material name="silver">',
+        '    <color rgba="0.700 0.700 0.700 1.000"/>',
+        '</material>'
+    ]
+    
+    # Generate each stage and collect joint pairs
+    all_joint_pairs = []
+    accumulated_height = 0
+    
+    for i, (stage_num, base_prefix, base_z) in enumerate(stages):
+        # Create the platform with the accumulated height
+        platform = StewartPlatformURDF(stage_num, base_prefix, accumulated_height)
+        
+        # Add all links and joints from this stage
+        for link in platform.links:
+            xml_parts.append(link.to_xml())
+        for joint in platform.joints:
+            xml_parts.append(joint.to_xml())
+            
+        # Collect joint pairs for this stage
+        all_joint_pairs.append(platform.get_joint_pair_indices())
+        
+        # If this isn't the last stage, add a fixed joint to connect to the next stage
+        if i < len(stages) - 1:
+            next_stage = stages[i + 1]
+            next_stage_prefix = next_stage[1]
+            next_stage_num = next_stage[0]
+            next_stage_z = next_stage[2]
+            
+            # Get the TOP1 link properties from the original URDF
+            top_props = platform.original_link_props["TOP1"]
+            top_origin = Origin(
+                xyz=tuple(map(float, top_props.visual['origin']['xyz'].split())),
+                rpy=tuple(map(float, top_props.visual['origin']['rpy'].split())) if 'rpy' in top_props.visual['origin'] else (0, 0, 0)
+            )
+            
+            # Get the base_link properties from the original URDF
+            base_props = platform.original_link_props["base_link"]
+            base_origin = Origin(
+                xyz=tuple(map(float, base_props.visual['origin']['xyz'].split())),
+                rpy=tuple(map(float, base_props.visual['origin']['rpy'].split())) if 'rpy' in base_props.visual['origin'] else (0, 0, 0)
+            )
+            
+            # Calculate the offset needed to align the centers
+            offset_x = top_origin.xyz[0] - base_origin.xyz[0]
+            offset_y = top_origin.xyz[1] - base_origin.xyz[1]
+            offset_z = next_stage_z  # Use the specified z-offset for height
+            
+            # Create fixed joint between TOP1 of current stage and base_link of next stage
+            connection_joint = Joint(
+                name=f"stage_connection_{stage_num}",
+                joint_type="fixed",
+                parent=platform.name_manager.get_component_name("TOP1"),
+                child=f"{next_stage_prefix}base_link{next_stage_num}",
+                # Set the origin to align the centers
+                origin=Origin(
+                    xyz=(offset_x, offset_y, offset_z),
+                    rpy=(0, 0, 0)  # Maintain orientation
+                ),
+                axis=(0, 0, 0)  # Fixed joint doesn't need an axis
+            )
+            xml_parts.append(connection_joint.to_xml())
+        
+        # Update accumulated height for next stage
+        accumulated_height += base_z
+    
+    # Close the URDF
+    xml_parts.append('</robot>')
+    urdf_str = '\n'.join(xml_parts)
+    
+    # Validate and clean up XML
+    try:
+        root = ET.fromstring(urdf_str)
+        clean_xml = ET.tostring(root, encoding='unicode', method='xml')
+        return clean_xml, all_joint_pairs
+    except ET.ParseError as e:
+        print(f"[XML Error] Failed to parse generated XML: {e}")
+        raise
 
 def save_urdf(urdf_string: str, filename: str = "stewart.urdf") -> None:
     """Save URDF string to a file."""
@@ -878,9 +1022,14 @@ def save_urdf(urdf_string: str, filename: str = "stewart.urdf") -> None:
         f.write(urdf_string)
 
 if __name__ == "__main__":
-    # Example: Generate two stacked platforms
-    platform1 = generate_stewart_platform(stage=1, base_prefix="lower_", base_z=0)
-    # platform2 = generate_stewart_platform(stage=2, base_prefix="upper_", base_z=0.5)  # 0.5m above first platform
+    # Generate two stacked platforms in a single URDF
+    stages = [
+        (1, "lower_", 0),      # Stage 1 at z=0
+        (2, "upper_", 0.5)     # Stage 2 at z=0.5
+    ]
     
-    save_urdf(platform1, "stewart_lower.urdf")
-    # save_urdf(platform2, "stewart_upper.urdf") 
+    urdf_string, all_joint_pairs = generate_stewart_platform(stages)
+    save_urdf(urdf_string, "stewart_combined.urdf")
+    
+    print("Joint pairs for stage 1:", all_joint_pairs[0])
+    print("Joint pairs for stage 2:", all_joint_pairs[1]) 
