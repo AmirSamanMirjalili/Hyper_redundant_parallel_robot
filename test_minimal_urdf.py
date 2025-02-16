@@ -99,6 +99,8 @@ def main():
         (2, "upper_", 0),   # Stage 2 with 8cm spacing from Stage 1
         (3, "upper2_", 0),   # Stage 3 with 8cm spacing from Stage 2
         (4, "upper3_", 0),   # Stage 4 with 8cm spacing from Stage 3
+        (5, "upper4_", 0),   # Stage 5 with 8cm spacing from Stage 4
+        (6, "upper5_", 0),   # Stage 6 with 8cm spacing from Stage 5
     ]
     urdf_path = "stewart_combined.urdf"
     urdf_string, all_joint_pairs = generate_stewart_platform(stages)
