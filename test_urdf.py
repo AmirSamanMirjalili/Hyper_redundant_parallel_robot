@@ -292,8 +292,12 @@ def urdf_data() -> URDFTestData:
     }
     original_link_props = extract_link_properties('Stewart.urdf')
     
-    # Generate our URDF
-    generated_urdf = generate_stewart_platform(stage=1)
+    # Generate our URDF with two stages
+    stages = [
+        (1, "lower_", 0),      # Stage 1 at z=0
+        (2, "upper_", 0.08)    # Stage 2 at z=0.08
+    ]
+    generated_urdf, all_joint_pairs = generate_stewart_platform(stages)
     generated_root = ET.fromstring(generated_urdf)
     
     # Extract properties from generated URDF
@@ -316,7 +320,8 @@ def urdf_data() -> URDFTestData:
             'joints': generated_joint_props,
             'links': generated_link_props,
             'root': generated_root,
-            'urdf': generated_urdf
+            'urdf': generated_urdf,
+            'joint_pairs': all_joint_pairs
         }
     )
 
@@ -899,3 +904,80 @@ class TestPyBulletIntegration:
         finally:
             if os.path.exists(test_urdf_path):
                 os.remove(test_urdf_path)
+
+class TestStageConnections:
+    """Tests for connections between stages."""
+    def test_stage_connection_joint(self, urdf_data: URDFTestData):
+        """Test if stages are connected with correct fixed joints."""
+        generated_root = urdf_data.generated['root']
+        
+        # Find the stage connection joint
+        connection_joint = generated_root.find(".//joint[@name='stage_connection_1']")
+        assert connection_joint is not None, "Should find stage connection joint"
+        assert connection_joint.get('type') == 'fixed', "Stage connection should be fixed"
+        
+        # Check parent and child links
+        parent = connection_joint.find('parent')
+        child = connection_joint.find('child')
+        assert parent is not None and child is not None, "Joint should have parent and child"
+        assert parent.get('link') == 'TOP11', "Parent should be TOP1 of stage 1"
+        assert child.get('link') == 'upper_base_link2', "Child should be base_link of stage 2"
+        
+        # Check origin
+        origin = connection_joint.find('origin')
+        assert origin is not None, "Joint should have origin"
+        xyz = tuple(map(float, origin.get('xyz').split()))
+        rpy = tuple(map(float, origin.get('rpy').split()))
+        
+        # Verify the offset aligns the centers
+        assert abs(xyz[2] - 0.08) < 1e-6, "Z-offset should be 0.08"
+        assert rpy == (0, 0, 0), "Orientation should be preserved"
+
+    def test_stage_naming(self, urdf_data: URDFTestData):
+        """Test if stage-based naming is working correctly for multiple stages."""
+        generated_root = urdf_data.generated['root']
+        
+        # Check base links for both stages
+        base_link1 = generated_root.find(".//link[@name='lower_base_link1']")
+        base_link2 = generated_root.find(".//link[@name='upper_base_link2']")
+        assert base_link1 is not None, "Stage 1 base link should exist"
+        assert base_link2 is not None, "Stage 2 base link should exist"
+        
+        # Check some components from each stage
+        stage1_components = [
+            'X1bottom11',  # Bottom link from stage 1
+            'cylinder111',  # Cylinder from stage 1
+            'TOP11'        # TOP link from stage 1
+        ]
+        stage2_components = [
+            'X1bottom12',  # Bottom link from stage 2
+            'cylinder112',  # Cylinder from stage 2
+            'TOP12'        # TOP link from stage 2
+        ]
+        
+        for component in stage1_components:
+            link = generated_root.find(f".//link[@name='{component}']")
+            assert link is not None, f"Stage 1 component {component} should exist"
+        
+        for component in stage2_components:
+            link = generated_root.find(f".//link[@name='{component}']")
+            assert link is not None, f"Stage 2 component {component} should exist"
+
+    def test_stage_joint_pairs(self, urdf_data: URDFTestData):
+        """Test if joint pairs are correctly generated for each stage."""
+        joint_pairs = urdf_data.generated['joint_pairs']
+        assert len(joint_pairs) == 2, "Should have joint pairs for both stages"
+        
+        # Check stage 1 joint pairs
+        stage1_pairs = joint_pairs[0]
+        assert len(stage1_pairs) == 5, "Stage 1 should have 5 joint pairs"
+        for pair in stage1_pairs:
+            assert pair[0] % 10 == 1, "First stage joint numbers should end in 1"
+            assert pair[1] % 10 == 1, "First stage joint numbers should end in 1"
+        
+        # Check stage 2 joint pairs
+        stage2_pairs = joint_pairs[1]
+        assert len(stage2_pairs) == 5, "Stage 2 should have 5 joint pairs"
+        for pair in stage2_pairs:
+            assert pair[0] % 10 == 2, "Second stage joint numbers should end in 2"
+            assert pair[1] % 10 == 2, "Second stage joint numbers should end in 2"
