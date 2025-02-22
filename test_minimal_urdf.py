@@ -59,6 +59,11 @@ class StewartPlatform:
         for parent_id, child_id in self.joint_indices:
             # Create the constraint
             try:
+                parent_info = p.getJointInfo(self.robotId, parent_id)
+                child_info = p.getJointInfo(self.robotId, child_id)
+                parent_name = parent_info[1].decode('utf-8')
+                child_name = child_info[1].decode('utf-8')
+
                 constraint_id = p.createConstraint(self.robotId, parent_id, 
                                                 self.robotId, child_id, 
                                                 p.JOINT_FIXED, [0,0,0], [0,0,0], [0,0,0])
@@ -66,6 +71,9 @@ class StewartPlatform:
                 self.constraints.append(constraint_id)
                 # Set constraint parameters
                 p.changeConstraint(constraint_id, maxForce=1e20)
+
+                print(f"Creating fixed constraint between {parent_name} and {child_name}")
+
             except p.error as e:
                 print(f"Failed to create constraint between joints {parent_id} and {child_id}")
                 print(f"Parent joint info: {p.getJointInfo(self.robotId, parent_id)}")
@@ -94,14 +102,15 @@ def main():
     )
 
     # Generate and save combined URDF
-    stages = [
-        (1, "lower_", 0),      # Stage 1 at z=0
-        (2, "upper_", 0),   # Stage 2 with 8cm spacing from Stage 1
-        (3, "upper2_", 0),   # Stage 3 with 8cm spacing from Stage 2
-        (4, "upper3_", 0),   # Stage 4 with 8cm spacing from Stage 3
-        (5, "upper4_", 0),   # Stage 5 with 8cm spacing from Stage 4
-        (6, "upper5_", 0),   # Stage 6 with 8cm spacing from Stage 5
-    ]
+    # stages = [
+    #     (1, "lower_", 0),      # Stage 1 at z=0
+    #     (2, "upper_", 0),   # Stage 2 with 8cm spacing from Stage 1
+    #     (3, "upper2_", 0),   # Stage 3 with 8cm spacing from Stage 2
+    #     (4, "upper3_", 0),   # Stage 4 with 8cm spacing from Stage 3
+    #     (5, "upper4_", 0),   # Stage 5 with 8cm spacing from Stage 4
+    #     (6, "upper5_", 0),   # Stage 6 with 8cm spacing from Stage 5
+    # ]
+    stages = [(1, "lower_", 0)]
     urdf_path = "stewart_combined.urdf"
     urdf_string, all_joint_pairs = generate_stewart_platform(stages)
     save_urdf(urdf_string, urdf_path)
