@@ -1027,7 +1027,7 @@ if __name__ == "__main__":
     # Generate two stacked platforms in a single URDF
     stages = [
         (1, "lower_", 0),      # Stage 1 at z=0
-        (2, "upper_", 0.5)     # Stage 2 at z=0.5
+        # (2, "upper_", 0.5)     # Stage 2 at z=0.5
     ]
     
     urdf_string, all_joint_pairs = generate_stewart_platform(stages)
